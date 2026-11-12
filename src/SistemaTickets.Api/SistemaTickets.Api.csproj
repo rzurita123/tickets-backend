@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SistemaTickets.Application\SistemaTickets.Application.csproj" />
+    <ProjectReference Include="..\SistemaTickets.Infrastructure\SistemaTickets.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

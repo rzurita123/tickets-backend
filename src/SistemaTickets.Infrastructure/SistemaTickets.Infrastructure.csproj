@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SistemaTickets.Application\SistemaTickets.Application.csproj" />
+  </ItemGroup>
+
+</Project>
