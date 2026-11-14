@@ -3,11 +3,10 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using SistemaTickets.Api.Seguridad;
-using SistemaTickets.Application.Localidades;
+using SistemaTickets.Application.Catalogos;
 using SistemaTickets.Application.Usuarios;
-using SistemaTickets.Infrastructure.Localidades;
+using SistemaTickets.Infrastructure.Persistencia;
 using SistemaTickets.Infrastructure.Seguridad;
-using SistemaTickets.Infrastructure.Usuarios;
 
 const string PoliticaCors = "Frontend";
 
@@ -26,8 +25,8 @@ if (string.IsNullOrEmpty(jwt.Clave))
     jwt.Clave = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
 }
 
-var contrasenaInicial = configuracion["UsuariosIniciales:Contrasena"]
-    ?? throw new InvalidOperationException("Falta la configuración UsuariosIniciales:Contrasena.");
+var cadenaConexion = configuracion.GetConnectionString("Tickets")
+    ?? throw new InvalidOperationException("Falta la cadena de conexión Tickets.");
 
 builder.Services.AddControllers();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -40,11 +39,10 @@ builder.Services.Configure<OpcionesJwt>(o =>
 });
 
 builder.Services.AddSingleton<IHashContrasenas, HashContrasenasPbkdf2>();
-builder.Services.AddSingleton<IRepositorioUsuarios>(sp =>
-    new RepositorioUsuariosEnMemoria(sp.GetRequiredService<IHashContrasenas>(), contrasenaInicial));
-builder.Services.AddSingleton<IRepositorioLocalidades, RepositorioLocalidadesEnMemoria>();
+builder.Services.AddPersistencia(cadenaConexion);
 builder.Services.AddSingleton<IGeneradorToken, GeneradorTokenJwt>();
 builder.Services.AddScoped<ServicioIngreso>();
+builder.Services.AddScoped<ServicioCatalogos>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -78,6 +76,8 @@ builder.Services.AddCors(o => o.AddPolicy(PoliticaCors, p =>
 
 var app = builder.Build();
 
+await app.Services.PrepararBaseAsync(configuracion["UsuariosIniciales:Contrasena"]);
+
 app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -86,6 +86,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-app.Run();
+await app.RunAsync();
 
 public partial class Program;

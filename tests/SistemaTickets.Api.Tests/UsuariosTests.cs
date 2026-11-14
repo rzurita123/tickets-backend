@@ -8,7 +8,7 @@ using SistemaTickets.Api.Controllers;
 
 namespace SistemaTickets.Api.Tests;
 
-public class UsuariosTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class UsuariosTests(FabricaApi factory) : IClassFixture<FabricaApi>
 {
     [Fact]
     public async Task Listar_con_token_devuelve_los_usuarios()

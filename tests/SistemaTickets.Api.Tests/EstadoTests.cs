@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace SistemaTickets.Api.Tests;
 
-public class EstadoTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class EstadoTests(FabricaApi factory) : IClassFixture<FabricaApi>
 {
     [Fact]
     public async Task El_endpoint_de_estado_responde_ok()
