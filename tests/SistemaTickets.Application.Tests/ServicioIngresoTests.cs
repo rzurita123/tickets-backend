@@ -63,6 +63,9 @@ public class ServicioIngresoTests
 
         public Task<Usuario?> BuscarPorIdAsync(int id, CancellationToken cancelacion = default) =>
             Task.FromResult(usuarios.FirstOrDefault(u => u.Id == id));
+
+        public Task<IReadOnlyList<Usuario>> ListarAsync(CancellationToken cancelacion = default) =>
+            Task.FromResult<IReadOnlyList<Usuario>>(usuarios);
     }
 
     private sealed class HashFalso : IHashContrasenas

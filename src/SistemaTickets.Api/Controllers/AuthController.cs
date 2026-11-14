@@ -8,10 +8,10 @@ namespace SistemaTickets.Api.Controllers;
 
 public record SolicitudIngreso(string? Usuario, string? Contrasena);
 
-public record UsuarioDto(int Id, string Usuario, string Nombre, string Email, string Rol, int? LocalidadId)
+public record UsuarioDto(int Id, string Usuario, string Nombre, string Email, string Rol, string? Cargo, int? LocalidadId, bool Activo)
 {
     public static UsuarioDto Desde(Usuario u) =>
-        new(u.Id, u.NombreUsuario, u.Nombre, u.Email, u.Rol.ToString().ToUpperInvariant(), u.LocalidadId);
+        new(u.Id, u.NombreUsuario, u.Nombre, u.Email, u.Rol.ToString().ToUpperInvariant(), u.Cargo, u.LocalidadId, u.Activo);
 }
 
 public record RespuestaIngreso(string Token, DateTime Expira, UsuarioDto Usuario);

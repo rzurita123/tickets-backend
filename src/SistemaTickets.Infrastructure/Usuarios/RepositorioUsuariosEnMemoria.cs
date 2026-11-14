@@ -11,7 +11,7 @@ public class RepositorioUsuariosEnMemoria : IRepositorioUsuarios
     {
         var hashInicial = hash.Generar(contrasenaInicial);
 
-        Usuario Crear(int id, string nombreUsuario, string nombre, string email, Rol rol, int? localidadId = null) => new()
+        Usuario Crear(int id, string nombreUsuario, string nombre, string email, Rol rol, string cargo, int? localidadId = null) => new()
         {
             Id = id,
             NombreUsuario = nombreUsuario,
@@ -19,17 +19,18 @@ public class RepositorioUsuariosEnMemoria : IRepositorioUsuarios
             Email = email,
             HashContrasena = hashInicial,
             Rol = rol,
+            Cargo = cargo,
             LocalidadId = localidadId,
         };
 
         _usuarios =
         [
-            Crear(1, "vpereira", "Valeria Pereira", "vpereira@ormen.example", Rol.Operador),
-            Crear(2, "nacosta", "Nicolás Acosta", "nacosta@ormen.example", Rol.Operador),
-            Crear(3, "scabrera", "Silvia Cabrera", "scabrera@ormen.example", Rol.Administrador),
-            Crear(4, "ralvarez", "Rodrigo Álvarez", "ralvarez@ormen.example", Rol.Administrador),
-            Crear(5, "mtechera", "Marcelo Techera", "mtechera@pando.example", Rol.Cliente, localidadId: 1),
-            Crear(6, "lgomez", "Laura Gómez", "lgomez@lagomar.example", Rol.Cliente, localidadId: 2),
+            Crear(1, "vpereira", "Valeria Pereira", "vpereira@ormen.example", Rol.Operador, "Mesa de ayuda"),
+            Crear(2, "nacosta", "Nicolás Acosta", "nacosta@ormen.example", Rol.Operador, "Mesa de ayuda"),
+            Crear(3, "scabrera", "Silvia Cabrera", "scabrera@ormen.example", Rol.Administrador, "Gerencia de operaciones"),
+            Crear(4, "ralvarez", "Rodrigo Álvarez", "ralvarez@ormen.example", Rol.Administrador, "Responsable de sistemas"),
+            Crear(5, "mtechera", "Marcelo Techera", "mtechera@pando.example", Rol.Cliente, "Encargado", localidadId: 7),
+            Crear(6, "lgomez", "Laura Gómez", "lgomez@lagomar.example", Rol.Cliente, "Encargada", localidadId: 6),
         ];
     }
 
@@ -38,4 +39,7 @@ public class RepositorioUsuariosEnMemoria : IRepositorioUsuarios
 
     public Task<Usuario?> BuscarPorIdAsync(int id, CancellationToken cancelacion = default) =>
         Task.FromResult(_usuarios.FirstOrDefault(u => u.Id == id));
+
+    public Task<IReadOnlyList<Usuario>> ListarAsync(CancellationToken cancelacion = default) =>
+        Task.FromResult<IReadOnlyList<Usuario>>(_usuarios);
 }

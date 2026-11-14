@@ -3,7 +3,9 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using SistemaTickets.Api.Seguridad;
+using SistemaTickets.Application.Localidades;
 using SistemaTickets.Application.Usuarios;
+using SistemaTickets.Infrastructure.Localidades;
 using SistemaTickets.Infrastructure.Seguridad;
 using SistemaTickets.Infrastructure.Usuarios;
 
@@ -40,6 +42,7 @@ builder.Services.Configure<OpcionesJwt>(o =>
 builder.Services.AddSingleton<IHashContrasenas, HashContrasenasPbkdf2>();
 builder.Services.AddSingleton<IRepositorioUsuarios>(sp =>
     new RepositorioUsuariosEnMemoria(sp.GetRequiredService<IHashContrasenas>(), contrasenaInicial));
+builder.Services.AddSingleton<IRepositorioLocalidades, RepositorioLocalidadesEnMemoria>();
 builder.Services.AddSingleton<IGeneradorToken, GeneradorTokenJwt>();
 builder.Services.AddScoped<ServicioIngreso>();
 
