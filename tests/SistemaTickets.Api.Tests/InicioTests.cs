@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace SistemaTickets.Api.Tests;
 
-public class InicioTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class InicioTests(FabricaApi factory) : IClassFixture<FabricaApi>
 {
     [Fact]
     public async Task Api_Responde()

@@ -8,6 +8,7 @@ public class Usuario
     public required string Email { get; set; }
     public required string HashContrasena { get; set; }
     public Rol Rol { get; set; }
+    public string? Cargo { get; set; }
     public int? LocalidadId { get; set; }
     public bool Activo { get; set; } = true;
 

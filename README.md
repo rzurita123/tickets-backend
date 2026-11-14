@@ -20,6 +20,17 @@ tests/
 ## Requisitos
 
 - .NET SDK 10
+- SQL Server LocalDB
+- `dotnet tool install --global dotnet-ef`
+
+## Base de datos
+
+En desarrollo usa LocalDB (base `SistemaTickets`). Al arrancar, la Api aplica las migraciones y carga los datos iniciales si la base está vacía.
+
+```bash
+dotnet ef migrations add <Nombre> -p src/SistemaTickets.Infrastructure -s src/SistemaTickets.Api -o Persistencia/Migraciones
+dotnet ef database drop -p src/SistemaTickets.Infrastructure -s src/SistemaTickets.Api
+```
 
 ## Uso
 

@@ -8,7 +8,7 @@ using SistemaTickets.Api.Controllers;
 
 namespace SistemaTickets.Api.Tests;
 
-public class AuthTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class AuthTests(FabricaApi factory) : IClassFixture<FabricaApi>
 {
     private string Contrasena =>
         factory.Services.GetRequiredService<IConfiguration>()["UsuariosIniciales:Contrasena"]!;
