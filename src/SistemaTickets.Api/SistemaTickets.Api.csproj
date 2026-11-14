@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SistemaTickets.Application\SistemaTickets.Application.csproj" />
     <ProjectReference Include="..\SistemaTickets.Infrastructure\SistemaTickets.Infrastructure.csproj" />
   </ItemGroup>
