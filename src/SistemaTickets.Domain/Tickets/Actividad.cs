@@ -3,11 +3,16 @@ namespace SistemaTickets.Domain.Tickets;
 public enum TipoActividad
 {
     Creacion,
-    CambioEstado,
     Comentario,
     Asignacion,
+    Liberacion,
     Elevacion,
+    Bloqueo,
+    Desbloqueo,
     ModificacionDatos,
+    Cierre,
+    Reapertura,
+    Privacidad,
 }
 
 public class Actividad
@@ -21,4 +26,8 @@ public class Actividad
     public bool Privada { get; init; }
     public EstadoTicket? EstadoAnterior { get; init; }
     public EstadoTicket? EstadoNuevo { get; init; }
+    public int? OperadorId { get; init; }
+    public int? DestinoGrupoId { get; init; }
+    public int? DestinoUsuarioId { get; init; }
+    public string? Detalle { get; init; }
 }
