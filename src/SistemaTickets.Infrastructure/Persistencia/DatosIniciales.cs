@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using SistemaTickets.Application.Usuarios;
 using SistemaTickets.Domain.Catalogos;
+using SistemaTickets.Domain.Soluciones;
+using SistemaTickets.Domain.Tickets;
 using SistemaTickets.Domain.Usuarios;
 
 namespace SistemaTickets.Infrastructure.Persistencia;
@@ -37,6 +39,12 @@ public static class DatosIniciales
         ("lgomez", "Laura Gómez", "lgomez@lagomar.example", Rol.Cliente, "Encargada", "Lagomar"),
     ];
 
+    private static readonly (string Clave, int Valor)[] Parametros =
+    [
+        ("pesoSistema", 3), ("pesoSubsistema", 2), ("pesoPalabraClave", 2),
+        ("pesoLocalidad", 1), ("pesoPalabraComun", 1), ("maxResultados", 6),
+    ];
+
     public static async Task CargarAsync(ContextoTickets contexto, IHashContrasenas hash, string? contrasenaInicial, CancellationToken cancelacion = default)
     {
         if (!await contexto.Localidades.AnyAsync(cancelacion))
@@ -66,6 +74,65 @@ public static class DatosIniciales
             }));
             await contexto.SaveChangesAsync(cancelacion);
         }
+
+        if (await contexto.Usuarios.AnyAsync(cancelacion) && !await contexto.Soluciones.AnyAsync(cancelacion))
+        {
+            await CargarSolucionesAsync(contexto, cancelacion);
+        }
+
+        if (!await contexto.ParametrosSugerencia.AnyAsync(cancelacion))
+        {
+            contexto.ParametrosSugerencia.AddRange(Parametros.Select(p => new ParametroSugerencia { Clave = p.Clave, Valor = p.Valor }));
+            await contexto.SaveChangesAsync(cancelacion);
+        }
+    }
+
+    private static async Task CargarSolucionesAsync(ContextoTickets contexto, CancellationToken cancelacion)
+    {
+        var usuarios = await contexto.Usuarios.ToDictionaryAsync(u => u.NombreUsuario, u => u.Id, cancelacion);
+        var sistemas = await contexto.Sistemas.ToDictionaryAsync(s => s.Codigo, s => s.Id, cancelacion);
+        var subsistemas = await contexto.Subsistemas.ToDictionaryAsync(s => s.Codigo, s => s.Id, cancelacion);
+        var ahora = DateTime.UtcNow;
+        var lista = SolucionesIniciales.Lista;
+
+        for (var i = 0; i < lista.Length; i++)
+        {
+            var s = lista[i];
+            var creada = ahora.AddDays(-(300 - i * 2));
+            var revisada = s.PropuestaPor == s.RevisadaPor ? creada : creada.AddHours(20);
+            var solucion = new Solucion
+            {
+                Codigo = s.Codigo,
+                Titulo = s.Titulo,
+                Texto = s.Texto,
+                Estado = EstadoSolucion.Aprobada,
+                SistemaId = s.Sistema is null ? null : sistemas[s.Sistema],
+                SubsistemaId = s.Subsistema is null ? null : subsistemas[s.Subsistema],
+                PalabrasClave = [.. s.PalabrasClave],
+                PropuestaPorId = usuarios[s.PropuestaPor],
+                RevisadaPorId = usuarios[s.RevisadaPor],
+                CreadaEn = creada,
+                RevisadaEn = revisada,
+                ActualizadaEn = revisada,
+            };
+            if (s.ConImagen)
+            {
+                solucion.Adjuntos.Add(new Adjunto
+                {
+                    Origen = OrigenAdjunto.Solucion,
+                    Clave = "img-" + s.Codigo,
+                    Nombre = "pasos-impresora.svg",
+                    TipoContenido = "image/svg+xml",
+                    Contenido = System.Text.Encoding.UTF8.GetBytes(SolucionesIniciales.ImagenPasos),
+                    SubidoPorId = usuarios[s.PropuestaPor],
+                    Fecha = creada,
+                });
+            }
+
+            contexto.Soluciones.Add(solucion);
+        }
+
+        await contexto.SaveChangesAsync(cancelacion);
     }
 
     private static async Task CargarCatalogosAsync(ContextoTickets contexto, CancellationToken cancelacion)

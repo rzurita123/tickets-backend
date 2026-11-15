@@ -2,8 +2,10 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using SistemaTickets.Api.Controllers;
 using SistemaTickets.Api.Seguridad;
 using SistemaTickets.Application.Catalogos;
+using SistemaTickets.Application.Tickets;
 using SistemaTickets.Application.Usuarios;
 using SistemaTickets.Infrastructure.Persistencia;
 using SistemaTickets.Infrastructure.Seguridad;
@@ -43,6 +45,8 @@ builder.Services.AddPersistencia(cadenaConexion);
 builder.Services.AddSingleton<IGeneradorToken, GeneradorTokenJwt>();
 builder.Services.AddScoped<ServicioIngreso>();
 builder.Services.AddScoped<ServicioCatalogos>();
+builder.Services.AddScoped<ServicioTickets>();
+builder.Services.AddScoped<MapeadorTickets>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

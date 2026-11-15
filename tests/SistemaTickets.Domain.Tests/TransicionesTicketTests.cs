@@ -29,25 +29,29 @@ public class TransicionesTicketTests
     }
 
     [Fact]
-    public void Cambiar_estado_registra_la_actividad_y_la_fecha_de_cierre()
+    public void El_recorrido_registra_actividad_y_fecha_de_cierre()
     {
-        var ticket = new Ticket { Titulo = "Terminal sin conexión" };
         var fecha = new DateTime(2026, 11, 11, 10, 0, 0, DateTimeKind.Utc);
+        var ticket = Ticket.NuevoBorrador(autorId: 1, fecha);
 
-        ticket.CambiarEstado(EstadoTicket.Abierto, autorId: 1, fecha);
-        ticket.CambiarEstado(EstadoTicket.Cerrado, autorId: 2, fecha);
+        ticket.Registrar(numero: 1001, privado: false, desdeBorrador: false, autorId: 1, fecha);
+        ticket.Asignar(operadorId: 2, autorId: 2, fecha);
+        ticket.Cerrar("Se reinició la terminal.", null, null, [], autorId: 2, fecha);
 
         Assert.Equal(EstadoTicket.Cerrado, ticket.Estado);
         Assert.Equal(fecha, ticket.CerradoEn);
-        Assert.Equal(2, ticket.Actividades.Count);
+        Assert.Equal(
+            [TipoActividad.Creacion, TipoActividad.Asignacion, TipoActividad.Cierre],
+            ticket.Actividades.Select(a => a.Tipo));
     }
 
     [Fact]
-    public void Cambiar_estado_falla_si_la_transicion_no_esta_permitida()
+    public void No_se_bloquea_un_ticket_abierto()
     {
-        var ticket = new Ticket { Titulo = "Terminal sin conexión" };
+        var fecha = new DateTime(2026, 11, 11, 10, 0, 0, DateTimeKind.Utc);
+        var ticket = Ticket.NuevoBorrador(autorId: 1, fecha);
+        ticket.Registrar(numero: 1001, privado: false, desdeBorrador: false, autorId: 1, fecha);
 
-        Assert.Throws<InvalidOperationException>(
-            () => ticket.CambiarEstado(EstadoTicket.Bloqueado, autorId: 1, DateTime.UtcNow));
+        Assert.Throws<ReglaTicketException>(() => ticket.Bloquear("Falta un repuesto", privada: false, autorId: 2, fecha));
     }
 }

@@ -2,9 +2,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SistemaTickets.Application.Catalogos;
 using SistemaTickets.Application.Localidades;
+using SistemaTickets.Application.Soluciones;
+using SistemaTickets.Application.Tickets;
 using SistemaTickets.Application.Usuarios;
 using SistemaTickets.Infrastructure.Catalogos;
 using SistemaTickets.Infrastructure.Localidades;
+using SistemaTickets.Infrastructure.Soluciones;
+using SistemaTickets.Infrastructure.Tickets;
 using SistemaTickets.Infrastructure.Usuarios;
 
 namespace SistemaTickets.Infrastructure.Persistencia;
@@ -17,6 +21,8 @@ public static class RegistroPersistencia
         servicios.AddScoped<IRepositorioUsuarios, RepositorioUsuarios>();
         servicios.AddScoped<IRepositorioLocalidades, RepositorioLocalidades>();
         servicios.AddScoped<IRepositorioCatalogos, RepositorioCatalogos>();
+        servicios.AddScoped<IRepositorioTickets, RepositorioTickets>();
+        servicios.AddScoped<IRepositorioSoluciones, RepositorioSoluciones>();
         return servicios;
     }
 
