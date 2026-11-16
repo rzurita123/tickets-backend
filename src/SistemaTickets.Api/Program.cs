@@ -31,6 +31,8 @@ var cadenaConexion = configuracion.GetConnectionString("Tickets")
     ?? throw new InvalidOperationException("Falta la cadena de conexión Tickets.");
 
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.Configure<OpcionesJwt>(o =>
 {
@@ -80,6 +82,11 @@ builder.Services.AddCors(o => o.AddPolicy(PoliticaCors, p =>
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 await app.Services.PrepararBaseAsync(configuracion["UsuariosIniciales:Contrasena"]);
 
 app.UseHttpsRedirection();
