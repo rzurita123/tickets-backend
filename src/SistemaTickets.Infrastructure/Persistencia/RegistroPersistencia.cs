@@ -17,7 +17,7 @@ public static class RegistroPersistencia
 {
     public static IServiceCollection AddPersistencia(this IServiceCollection servicios, string cadenaConexion)
     {
-        servicios.AddDbContext<ContextoTickets>(o => o.UseSqlServer(cadenaConexion));
+        servicios.AddDbContext<ContextoTickets>(o => o.UseSqlServer(cadenaConexion, sql => sql.EnableRetryOnFailure()));
         servicios.AddScoped<IRepositorioUsuarios, RepositorioUsuarios>();
         servicios.AddScoped<IRepositorioLocalidades, RepositorioLocalidades>();
         servicios.AddScoped<IRepositorioCatalogos, RepositorioCatalogos>();
