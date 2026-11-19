@@ -171,8 +171,10 @@ public class ContextoTickets(DbContextOptions<ContextoTickets> opciones) : DbCon
         e.HasIndex(x => x.Codigo).IsUnique();
         return e;
     }
-}
-
+}
+
+
+
 public class FechaUtc() : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, DateTime>(
     v => v,
     v => DateTime.SpecifyKind(v, DateTimeKind.Utc));

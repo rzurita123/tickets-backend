@@ -85,6 +85,11 @@ public static class DatosIniciales
             contexto.ParametrosSugerencia.AddRange(Parametros.Select(p => new ParametroSugerencia { Clave = p.Clave, Valor = p.Valor }));
             await contexto.SaveChangesAsync(cancelacion);
         }
+
+        if (!await contexto.Tickets.AnyAsync(cancelacion))
+        {
+            await CargarTicketsAsync(contexto, cancelacion);
+        }
     }
 
     private static async Task CargarSolucionesAsync(ContextoTickets contexto, CancellationToken cancelacion)
@@ -134,6 +139,156 @@ public static class DatosIniciales
 
         await contexto.SaveChangesAsync(cancelacion);
     }
+
+
+    private static async Task CargarTicketsAsync(ContextoTickets contexto, CancellationToken cancelacion)
+    {
+        var usuarios = await contexto.Usuarios.ToDictionaryAsync(u => u.NombreUsuario, u => u, cancelacion);
+        var localidades = await contexto.Localidades.ToDictionaryAsync(l => l.Nombre, l => l.Id, cancelacion);
+        var sistemas = await contexto.Sistemas.ToDictionaryAsync(s => s.Codigo, s => s.Id, cancelacion);
+        var subsistemas = await contexto.Subsistemas.ToDictionaryAsync(s => s.Codigo, s => s.Id, cancelacion);
+        var criticidades = await contexto.Criticidades.ToDictionaryAsync(c => c.Codigo, c => c.Id, cancelacion);
+        var tipos = await contexto.TiposProblema.ToDictionaryAsync(t => t.Codigo, t => t.Id, cancelacion);
+
+        var ahora = DateTime.UtcNow;
+        var numero = (await contexto.Tickets.MaxAsync(t => t.Numero, cancelacion) ?? 1000) + 1;
+
+        Ticket Nuevo(
+            string titulo,
+            string descripcion,
+            string creador,
+            string localidad,
+            string sistema,
+            string subsistema,
+            string criticidad,
+            string tipo,
+            int diasAtras)
+        {
+            var fecha = ahora.AddDays(-diasAtras);
+            var ticket = Ticket.NuevoBorrador(usuarios[creador].Id, fecha);
+
+            ticket.Titulo = titulo;
+            ticket.Descripcion = descripcion;
+            ticket.LocalidadId = localidades[localidad];
+            ticket.SistemaId = sistemas[sistema];
+            ticket.SubsistemaId = subsistemas[subsistema];
+            ticket.CriticidadId = criticidades[criticidad];
+            ticket.TipoProblemaId = tipos[tipo];
+
+            return ticket;
+        }
+
+        Ticket Registrar(Ticket ticket, int diasAtras)
+        {
+            ticket.Registrar(numero++, false, false, ticket.CreadoPorId, ahora.AddDays(-diasAtras));
+            return ticket;
+        }
+
+        var tickets = new List<Ticket>();
+
+        // 4 tickets abiertos, pendientes de asignación.
+        tickets.Add(Registrar(Nuevo(
+            "Liquidación diaria con diferencias",
+            "Se detectan diferencias en los importes de la liquidación diaria.",
+            "mtechera", "Pando", "sis-liquidacion", "sub-liq-diaria",
+            "cri-alta", "tp-operacion", 1), 1));
+
+        tickets.Add(Registrar(Nuevo(
+            "Error al registrar movimientos de caja",
+            "El sistema muestra un error al intentar guardar movimientos.",
+            "lgomez", "Lagomar", "sis-caja", "sub-caja-movimientos",
+            "cri-media", "tp-software", 2), 2));
+
+        tickets.Add(Registrar(Nuevo(
+            "Terminal bloqueada",
+            "Una terminal permanece bloqueada y no permite operar.",
+            "mtechera", "Pando", "sis-control-terminales", "sub-term-bloqueo",
+            "cri-alta", "tp-equipamiento", 3), 3));
+
+        tickets.Add(Registrar(Nuevo(
+            "Problemas de conexión On-Line",
+            "Se reportan cortes intermitentes en la conexión.",
+            "lgomez", "Lagomar", "sis-online", "sub-online-conexion",
+            "cri-baja", "tp-configuracion", 4), 4));
+
+        // 3 tickets en proceso.
+        var t5 = Registrar(Nuevo(
+            "Falla en envío de archivos",
+            "Los archivos no están llegando al destino esperado.",
+            "mtechera", "Pando", "sis-envio-archivos", "sub-env-envio",
+            "cri-media", "tp-operacion", 2), 2);
+        t5.Asignar(usuarios["vpereira"].Id, usuarios["vpereira"].Id, ahora.AddDays(-2).AddHours(1));
+        tickets.Add(t5);
+
+        var t6 = Registrar(Nuevo(
+            "Problemas con recepción de correos",
+            "No se reciben algunos correos de la cuenta institucional.",
+            "lgomez", "Lagomar", "sis-correos", "sub-correo-recepcion",
+            "cri-baja", "tp-software", 3), 3);
+        t6.Asignar(usuarios["nacosta"].Id, usuarios["nacosta"].Id, ahora.AddDays(-3).AddHours(1));
+        tickets.Add(t6);
+
+        var t7 = Registrar(Nuevo(
+            "Error en permisos de usuarios",
+            "Un usuario no puede acceder a las opciones que tiene habilitadas.",
+            "mtechera", "Pando", "sis-adm-usuarios", "sub-usu-permisos",
+            "cri-alta", "tp-configuracion", 1), 1);
+        t7.Asignar(usuarios["vpereira"].Id, usuarios["vpereira"].Id, ahora.AddDays(-1).AddHours(1));
+        tickets.Add(t7);
+
+        // 2 tickets bloqueados.
+        var t8 = Registrar(Nuevo(
+            "Falla de sincronización de terminales",
+            "Se requiere intervención externa para completar la sincronización.",
+            "mtechera", "Pando", "sis-control-terminales", "sub-term-sincro",
+            "cri-alta", "tp-equipamiento", 5), 5);
+        t8.Asignar(usuarios["nacosta"].Id, usuarios["nacosta"].Id, ahora.AddDays(-5).AddHours(1));
+        t8.Bloquear("Pendiente de intervención del proveedor.", false,
+            usuarios["nacosta"].Id, ahora.AddDays(-4));
+        tickets.Add(t8);
+
+        var t9 = Registrar(Nuevo(
+            "Error en cierre de caja",
+            "El cierre de caja no coincide con los movimientos registrados.",
+            "lgomez", "Lagomar", "sis-caja", "sub-caja-cierre",
+            "cri-media", "tp-operacion", 4), 4);
+        t9.Asignar(usuarios["vpereira"].Id, usuarios["vpereira"].Id, ahora.AddDays(-4).AddHours(1));
+        t9.Bloquear("Se necesita información adicional de la localidad.", false,
+            usuarios["vpereira"].Id, ahora.AddDays(-3));
+        tickets.Add(t9);
+
+        // 2 tickets cerrados.
+        var t10 = Registrar(Nuevo(
+            "Error en reportes de liquidación",
+            "El reporte mensual presenta datos incompletos.",
+            "lgomez", "Lagomar", "sis-liquidacion", "sub-liq-reportes",
+            "cri-baja", "tp-software", 10), 10);
+        t10.Asignar(usuarios["nacosta"].Id, usuarios["nacosta"].Id, ahora.AddDays(-10).AddHours(1));
+        t10.Cerrar("Se corrigió la consulta que generaba el reporte.", null,
+            tipos["tp-software"], [], usuarios["nacosta"].Id, ahora.AddDays(-8));
+        tickets.Add(t10);
+
+        var t11 = Registrar(Nuevo(
+            "Instalación de equipo nuevo",
+            "Se solicita configurar un equipo para un puesto de trabajo.",
+            "mtechera", "Pando", "sis-instalaciones", "sub-inst-equipo",
+            "cri-media", "tp-equipamiento", 8), 8);
+        t11.Asignar(usuarios["vpereira"].Id, usuarios["vpereira"].Id, ahora.AddDays(-8).AddHours(1));
+        t11.Cerrar("El equipo quedó instalado y operativo.", null,
+            tipos["tp-equipamiento"], [], usuarios["vpereira"].Id, ahora.AddDays(-6));
+        tickets.Add(t11);
+
+        // 1 borrador sin número.
+        tickets.Add(Nuevo(
+            "Configuración de cuenta de correo",
+            "Borrador de solicitud para configurar una cuenta de correo.",
+            "lgomez", "Lagomar", "sis-correos", "sub-correo-cuenta",
+            "cri-baja", "tp-configuracion", 0));
+
+        contexto.Tickets.AddRange(tickets);
+        await contexto.SaveChangesAsync(cancelacion);
+    }
+
 
     private static async Task CargarCatalogosAsync(ContextoTickets contexto, CancellationToken cancelacion)
     {
