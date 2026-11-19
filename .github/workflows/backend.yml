@@ -1,0 +1,79 @@
+name: Backend
+
+on:
+  pull_request:
+    branches: [develop, main, 'release/**']
+  push:
+    branches: [develop, main, 'release/**', 'hotfix/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    name: Compilar y probar
+    runs-on: ubuntu-latest
+    outputs:
+      entorno: ${{ steps.entorno.outputs.nombre }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: dotnet restore
+      - run: dotnet build --configuration Release --no-restore
+      - run: dotnet test --configuration Release --no-build
+
+      - name: Publicar la Api
+        if: github.event_name != 'pull_request'
+        run: dotnet publish src/SistemaTickets.Api --configuration Release --no-build --output publicacion
+
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: api
+          path: publicacion
+          retention-days: 7
+
+      - name: Elegir el entorno
+        id: entorno
+        if: github.event_name != 'pull_request'
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            main) echo "nombre=produccion" >> "$GITHUB_OUTPUT" ;;
+            develop) echo "nombre=develop" >> "$GITHUB_OUTPUT" ;;
+            *) echo "nombre=testing" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  desplegar:
+    name: Desplegar
+    needs: verificar
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.verificar.outputs.entorno }}
+    concurrency:
+      group: backend-${{ needs.verificar.outputs.entorno }}
+      cancel-in-progress: false
+    env:
+      APP: ${{ vars.AZURE_WEBAPP_NAME }}
+      PERFIL: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+    steps:
+      - name: Entorno sin configurar
+        if: env.APP == '' || env.PERFIL == ''
+        run: echo "::notice::El entorno ${{ needs.verificar.outputs.entorno }} no tiene AZURE_WEBAPP_NAME o AZURE_WEBAPP_PUBLISH_PROFILE; no se despliega."
+
+      - uses: actions/download-artifact@v4
+        if: env.APP != '' && env.PERFIL != ''
+        with:
+          name: api
+          path: publicacion
+
+      - uses: azure/webapps-deploy@v3
+        if: env.APP != '' && env.PERFIL != ''
+        with:
+          app-name: ${{ env.APP }}
+          publish-profile: ${{ env.PERFIL }}
+          package: publicacion
