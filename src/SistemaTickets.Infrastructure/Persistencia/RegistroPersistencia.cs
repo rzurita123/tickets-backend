@@ -26,7 +26,7 @@ public static class RegistroPersistencia
         return servicios;
     }
 
-    public static async Task PrepararBaseAsync(this IServiceProvider servicios, string? contrasenaInicial)
+    public static async Task PrepararBaseAsync(this IServiceProvider servicios, string? contrasenaInicial, bool cargarRegistrosDiarios = false)
     {
         await using var ambito = servicios.CreateAsyncScope();
         var contexto = ambito.ServiceProvider.GetRequiredService<ContextoTickets>();
@@ -41,5 +41,9 @@ public static class RegistroPersistencia
         }
 
         await DatosIniciales.CargarAsync(contexto, ambito.ServiceProvider.GetRequiredService<IHashContrasenas>(), contrasenaInicial);
+        if (cargarRegistrosDiarios)
+        {
+            await RegistrosDiarios.CargarAsync(contexto);
+        }
     }
 }
