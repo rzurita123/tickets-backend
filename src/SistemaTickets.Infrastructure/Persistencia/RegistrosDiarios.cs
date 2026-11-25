@@ -19,12 +19,13 @@ internal static class RegistrosDiarios
 
     public static async Task CargarAsync(ContextoTickets contexto)
     {
-        var operador = await contexto.Usuarios
+        var operadorId = await contexto.Usuarios
             .Where(u => u.Rol == Rol.Operador)
             .OrderByDescending(u => u.NombreUsuario == "vpereira")
             .ThenBy(u => u.Id)
+            .Select(u => (int?)u.Id)
             .FirstOrDefaultAsync();
-        if (operador is null)
+        if (operadorId is null)
         {
             return;
         }
@@ -33,6 +34,18 @@ internal static class RegistrosDiarios
             "SistemaTickets.Infrastructure.Persistencia.RegistrosDiarios.json")
             ?? throw new InvalidOperationException("Faltan los registros diarios de ejemplo.");
         var registros = JsonSerializer.Deserialize<Registro[]>(recurso)!;
+        var estrategia = contexto.Database.CreateExecutionStrategy();
+        var idOperador = operadorId.Value;
+
+        await estrategia.ExecuteAsync(async () =>
+        {
+            contexto.ChangeTracker.Clear();
+            await CargarEnTransaccionAsync(contexto, idOperador, registros);
+        });
+    }
+
+    private static async Task CargarEnTransaccionAsync(ContextoTickets contexto, int operadorId, Registro[] registros)
+    {
         await using var transaccion = contexto.Database.IsRelational()
             ? await contexto.Database.BeginTransactionAsync(IsolationLevel.Serializable)
             : null;
@@ -103,7 +116,7 @@ internal static class RegistrosDiarios
         foreach (var (registro, referencia) in pendientes)
         {
             var sistema = sistemas[registro.Sistema];
-            var ticket = Ticket.NuevoBorrador(operador.Id, registro.Fecha);
+            var ticket = Ticket.NuevoBorrador(operadorId, registro.Fecha);
             ticket.Titulo = registro.Titulo;
             ticket.Descripcion = $"Sede original: {registro.Referencia}\n\n{registro.Descripcion}";
             ticket.LocalidadId = localidades[registro.Localidad].Id;
@@ -115,13 +128,13 @@ internal static class RegistrosDiarios
 
             if (registro.Cerrado)
             {
-                ticket.RegistrarResuelto(numero++, true, false, operador.Id, registro.Fecha, registro.Comentario, null, []);
-                ticket.Comentar(operador.Id, registro.Fecha, autor, true);
+                ticket.RegistrarResuelto(numero++, true, false, operadorId, registro.Fecha, registro.Comentario, null, []);
+                ticket.Comentar(operadorId, registro.Fecha, autor, true);
             }
             else
             {
-                ticket.Registrar(numero++, true, false, operador.Id, registro.Fecha);
-                ticket.Comentar(operador.Id, registro.Fecha, $"{autor}\n\n{registro.Comentario}".TrimEnd(), true);
+                ticket.Registrar(numero++, true, false, operadorId, registro.Fecha);
+                ticket.Comentar(operadorId, registro.Fecha, $"{autor}\n\n{registro.Comentario}".TrimEnd(), true);
             }
 
             contexto.Tickets.Add(ticket);
