@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using SistemaTickets.Api.Controllers;
 using SistemaTickets.Api.Seguridad;
@@ -92,8 +93,18 @@ await app.Services.PrepararBaseAsync(
     esDesarrollo && configuracion.GetValue<bool>("Ejemplos:CargarRegistrosDiarios"));
 
 app.UseHttpsRedirection();
-app.UseDefaultFiles();
-app.UseStaticFiles();
+var frontend = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "..", "tickets-frontend"));
+if (esDesarrollo && File.Exists(Path.Combine(frontend, "index.html")))
+{
+    var archivosFrontend = new PhysicalFileProvider(frontend);
+    app.Lifetime.ApplicationStopped.Register(archivosFrontend.Dispose);
+    app.UseFileServer(new FileServerOptions { FileProvider = archivosFrontend });
+}
+else
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
 app.UseCors(PoliticaCors);
 app.UseAuthentication();
 app.UseAuthorization();

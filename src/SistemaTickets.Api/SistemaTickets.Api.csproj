@@ -11,4 +11,11 @@
     <ProjectReference Include="..\SistemaTickets.Infrastructure\SistemaTickets.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\..\tickets-frontend\index.html" Link="wwwroot\index.html" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\..\tickets-frontend\css\**\*" Link="wwwroot\css\%(RecursiveDir)%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\..\tickets-frontend\js\**\*" Link="wwwroot\js\%(RecursiveDir)%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\..\tickets-frontend\assets\**\*" Link="wwwroot\assets\%(RecursiveDir)%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
