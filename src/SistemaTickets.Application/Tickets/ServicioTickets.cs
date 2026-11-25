@@ -312,16 +312,7 @@ public class ServicioTickets(
             ticket.CambiarPrivado(privado, usuario.Id, Ahora);
         }, cancelacion);
 
-    public static bool PuedeVer(Ticket ticket, Usuario usuario)
-    {
-        if (ticket.Estado == EstadoTicket.Borrador)
-        {
-            return ticket.CreadoPorId == usuario.Id;
-        }
-
-        return usuario.EsOrmen
-            || (!ticket.Privado && usuario.LocalidadId is not null && ticket.LocalidadId == usuario.LocalidadId);
-    }
+    public static bool PuedeVer(Ticket ticket, Usuario usuario) => VisibilidadTickets.PuedeVer(ticket, usuario);
 
     private async Task<Ticket?> TratarAsync(Usuario usuario, int id, Func<Ticket, Task> accion, CancellationToken cancelacion)
     {
