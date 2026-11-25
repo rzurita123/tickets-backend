@@ -25,6 +25,13 @@ public record TicketDto(
     DateTime CreadoEn, DateTime ActualizadoEn, DateTime? CerradoEn,
     IEnumerable<ImagenDto> Adjuntos, SolucionTicketDto? Solucion, IEnumerable<ActividadDto> Actividad);
 
+public record TicketResumenDto(
+    int Id, int? Numero, string Estado, string Titulo, bool Privado, int? LocalidadId,
+    string? Sistema, string? Subsistema, string? Criticidad, string? TipoProblema,
+    string? CreadoPor, string? Operador,
+    DateTime CreadoEn, DateTime ActualizadoEn, DateTime? CerradoEn);
+
+public record PaginaDto<T>(IEnumerable<T> Items, int Total, int Pagina, int PorPagina);
 public record ImagenSolicitud(string? Id, string? Nombre, string? DataUrl);
 
 public record SolicitudTicket(
@@ -48,7 +55,7 @@ public record SolicitudCierre(string? Texto, string? MensajePublico, string? Tip
 
 public record SolicitudPrivado(bool Privado);
 
-public class MapeadorTickets(IRepositorioUsuarios usuarios, IRepositorioCatalogos catalogos, IRepositorioSoluciones soluciones)
+public class MapeadorTickets(IRepositorioUsuarios usuarios, ICatalogoLectura catalogos, IRepositorioSoluciones soluciones)
 {
     private const int TamanoMaximoImagen = 5 * 1024 * 1024;
 
@@ -57,7 +64,6 @@ public class MapeadorTickets(IRepositorioUsuarios usuarios, IRepositorioCatalogo
 
     private Dictionary<int, string>? _usuarios;
     private Dictionary<int, string>? _soluciones;
-    private readonly Dictionary<TipoCatalogo, Dictionary<int, string>> _codigos = [];
 
     public static IReadOnlyList<ImagenNueva> Imagenes(List<ImagenSolicitud>? lista) =>
         (lista ?? []).Select(Imagen).ToList();
@@ -71,6 +77,26 @@ public class MapeadorTickets(IRepositorioUsuarios usuarios, IRepositorioCatalogo
         }
 
         return dtos;
+    }
+
+    public async Task<List<TicketResumenDto>> ResumenesAsync(IEnumerable<Ticket> lista, CancellationToken cancelacion)
+    {
+        _usuarios ??= (await usuarios.ListarAsync(cancelacion)).ToDictionary(u => u.Id, u => u.NombreUsuario);
+
+        var resultado = new List<TicketResumenDto>();
+        foreach (var t in lista)
+        {
+            resultado.Add(new TicketResumenDto(
+                t.Id, t.Numero, Estado(t.Estado)!, t.Titulo, t.Privado, t.LocalidadId,
+                await CodigoAsync(TipoCatalogo.Sistemas, t.SistemaId, cancelacion),
+                await CodigoAsync(TipoCatalogo.Subsistemas, t.SubsistemaId, cancelacion),
+                await CodigoAsync(TipoCatalogo.Criticidades, t.CriticidadId, cancelacion),
+                await CodigoAsync(TipoCatalogo.TiposProblema, t.TipoProblemaId, cancelacion),
+                Usuario(t.CreadoPorId), Usuario(t.OperadorId),
+                t.CreadoEn, t.ActualizadoEn, t.CerradoEn));
+        }
+
+        return resultado;
     }
 
     public async Task<TicketDto> DtoAsync(Ticket t, Usuario lector, CancellationToken cancelacion)
@@ -178,19 +204,6 @@ public class MapeadorTickets(IRepositorioUsuarios usuarios, IRepositorioCatalogo
         return usuario is null ? null : new DestinoDto("usuario", usuario);
     }
 
-    private async Task<string?> CodigoAsync(TipoCatalogo tipo, int? id, CancellationToken cancelacion)
-    {
-        if (id is not int valor)
-        {
-            return null;
-        }
-
-        if (!_codigos.TryGetValue(tipo, out var codigos))
-        {
-            codigos = (await catalogos.ListarAsync(tipo, cancelacion)).ToDictionary(x => x.Id, x => x.Codigo);
-            _codigos[tipo] = codigos;
-        }
-
-        return codigos.GetValueOrDefault(valor);
-    }
+    private Task<string?> CodigoAsync(TipoCatalogo tipo, int? id, CancellationToken cancelacion) =>
+     catalogos.CodigoAsync(tipo, id, cancelacion);
 }
