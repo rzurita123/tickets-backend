@@ -31,6 +31,50 @@ public class TicketsTests(FabricaApi factory) : IClassFixture<FabricaApi>
         Assert.Equal("tp-nodef", ticket.TipoProblema);
         Assert.Equal(Imagen, ticket.Adjuntos.Single().DataUrl);
         Assert.Equal("Creacion", ticket.Actividad.Single().Tipo);
+
+        var listado = await cliente.GetFromJsonAsync<List<TicketDto>>("/api/tickets");
+        var guardado = Assert.Single(listado!, t => t.Id == ticket.Id);
+        Assert.Equal(ticket.Numero, guardado.Numero);
+        Assert.Equal(ticket.Titulo, guardado.Titulo);
+        Assert.Equal(ticket.Estado, guardado.Estado);
+        Assert.Equal(ticket.LocalidadId, guardado.LocalidadId);
+    }
+
+    [Fact]
+    public async Task Un_operador_registra_un_incidente_para_la_localidad_del_cliente()
+    {
+        var operador = await ClienteConSesion("vpereira");
+        var pando = await ClienteConSesion("mtechera");
+        var lagomar = await ClienteConSesion("lgomez");
+        var cliente = await pando.GetFromJsonAsync<UsuarioDto>("/api/auth/yo");
+        Assert.NotNull(cliente);
+        Assert.NotNull(cliente.LocalidadId);
+
+        var solicitud = Solicitud("Incidente informado por la agencia", cliente.LocalidadId) with
+        {
+            TipoProblema = "tp-software",
+        };
+        var ticket = await Crear(operador, solicitud);
+
+        Assert.Equal("ABIERTO", ticket.Estado);
+        Assert.False(ticket.Privado);
+        Assert.Equal("vpereira", ticket.CreadoPor);
+        Assert.Equal(cliente.LocalidadId, ticket.LocalidadId);
+        Assert.Equal(solicitud.Titulo, ticket.Titulo);
+        Assert.Equal(solicitud.Descripcion, ticket.Descripcion);
+        Assert.Equal(solicitud.Sistema, ticket.Sistema);
+        Assert.Equal(solicitud.Subsistema, ticket.Subsistema);
+        Assert.Equal(solicitud.Criticidad, ticket.Criticidad);
+        Assert.Equal(solicitud.TipoProblema, ticket.TipoProblema);
+        Assert.Equal(Imagen, Assert.Single(ticket.Adjuntos).DataUrl);
+        Assert.Equal("vpereira", Assert.Single(ticket.Actividad).Autor);
+
+        var dePando = await pando.GetFromJsonAsync<List<TicketDto>>("/api/tickets");
+        var guardado = Assert.Single(dePando!, t => t.Id == ticket.Id);
+        Assert.Equal(ticket.Numero, guardado.Numero);
+        Assert.Equal(ticket.Descripcion, guardado.Descripcion);
+        var deLagomar = await lagomar.GetFromJsonAsync<List<TicketDto>>("/api/tickets");
+        Assert.DoesNotContain(deLagomar!, t => t.Id == ticket.Id);
     }
 
     [Fact]
