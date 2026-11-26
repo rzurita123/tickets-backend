@@ -14,8 +14,8 @@ namespace SistemaTickets.Api.Controllers;
 public class TicketsController(ServicioTickets tickets, MapeadorTickets mapeador, IRepositorioUsuarios usuarios) : ControllerBase
 {
     [HttpGet]
-    public Task<ActionResult> Listar(CancellationToken cancelacion) =>
-        ConUsuario(async u => Ok(await mapeador.DtosAsync(await tickets.ListarAsync(u, cancelacion), u, cancelacion)), cancelacion);
+    public Task<ActionResult> Listar(CancellationToken cancelacion, [FromQuery] bool incluirBorradores = true) =>
+        ConUsuario(async u => Ok(await mapeador.DtosAsync(await tickets.ListarAsync(u, incluirBorradores, cancelacion), u, cancelacion)), cancelacion);
 
     [HttpPost]
     public Task<ActionResult> Crear(SolicitudTicket s, CancellationToken cancelacion) =>
@@ -75,7 +75,8 @@ public class TicketsController(ServicioTickets tickets, MapeadorTickets mapeador
 
     [HttpPut("{id:int}/privado")]
     public Task<ActionResult> CambiarPrivado(int id, SolicitudPrivado s, CancellationToken cancelacion) =>
-        Ticket(u => tickets.CambiarPrivadoAsync(u, id, s.Privado, cancelacion), cancelacion);
+        Ticket(u => tickets.CambiarPrivadoAsync(u, id,
+            s.Privado ?? throw new ErrorTicket("Indicá la visibilidad del ticket.", "privado"), cancelacion), cancelacion);
 
     private static DatosTicket Datos(SolicitudTicket s) =>
         new(s.Titulo, s.Descripcion, s.LocalidadId, s.Sistema, s.Subsistema, s.Criticidad, s.TipoProblema, MapeadorTickets.Imagenes(s.Adjuntos));
@@ -101,6 +102,12 @@ public class TicketsController(ServicioTickets tickets, MapeadorTickets mapeador
         }
         catch (ErrorTicket e)
         {
+            if (e.Campo is string campo)
+            {
+                ModelState.AddModelError(campo, e.Message);
+                return ValidationProblem(title: e.Message, modelStateDictionary: ModelState);
+            }
+
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: e.Message);
         }
         catch (SinPermisoException e)

@@ -17,7 +17,15 @@ internal static class RegistrosDiarios
         DateTime Fecha, string Localidad, string Sistema, string Subsistema, string Titulo,
         string Descripcion, string Referencia, string? Autor, string Comentario, bool Cerrado);
 
-    public static async Task CargarAsync(ContextoTickets contexto)
+    public static Task CargarAsync(ContextoTickets contexto) =>
+        contexto.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            // Un intento anterior puede haber dejado entidades de la transacción revertida en memoria.
+            contexto.ChangeTracker.Clear();
+            await CargarEnTransaccionAsync(contexto);
+        });
+
+    private static async Task CargarEnTransaccionAsync(ContextoTickets contexto)
     {
         var operador = await contexto.Usuarios
             .Where(u => u.Rol == Rol.Operador)

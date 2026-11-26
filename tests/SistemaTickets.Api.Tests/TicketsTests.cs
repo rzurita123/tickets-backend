@@ -77,14 +77,53 @@ public class TicketsTests(FabricaApi factory) : IClassFixture<FabricaApi>
         Assert.DoesNotContain(deLagomar!, t => t.Id == ticket.Id);
     }
 
-    [Fact]
-    public async Task Sin_titulo_devuelve_400()
+    [Theory]
+    [InlineData("titulo")]
+    [InlineData("descripcion")]
+    [InlineData("localidadId")]
+    [InlineData("sistemaId")]
+    [InlineData("criticidadId")]
+    public async Task Alta_incompleta_devuelve_400_e_identifica_el_campo(string campo)
     {
-        var cliente = await ClienteConSesion("mtechera");
+        var operador = await ClienteConSesion("vpereira");
+        var solicitud = Solicitud("Incidente incompleto", localidadId: 7);
+        solicitud = campo switch
+        {
+            "titulo" => solicitud with { Titulo = " " },
+            "descripcion" => solicitud with { Descripcion = "\t" },
+            "localidadId" => solicitud with { LocalidadId = null },
+            "sistemaId" => solicitud with { Sistema = "" },
+            _ => solicitud with { Criticidad = null },
+        };
 
-        var respuesta = await cliente.PostAsJsonAsync("/api/tickets", Solicitud(" "));
+        var respuesta = await operador.PostAsJsonAsync("/api/tickets", solicitud);
 
         Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+        var problema = await respuesta.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ValidationProblemDetails>();
+        Assert.NotNull(problema);
+        Assert.False(string.IsNullOrWhiteSpace(Assert.Single(problema.Errors[campo])));
+    }
+
+    [Fact]
+    public async Task La_localidad_automatica_del_cliente_no_basta_para_guardar_un_borrador()
+    {
+        var cliente = await ClienteConSesion("mtechera");
+        var respuesta = await cliente.PostAsJsonAsync("/api/tickets/borradores", new { titulo = " ", descripcion = "\t" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cambiar_privacidad_requiere_indicar_el_valor()
+    {
+        var operador = await ClienteConSesion("vpereira");
+        var ticket = await Crear(operador, Solicitud("Privacidad explícita", localidadId: 7, privado: true));
+
+        var respuesta = await operador.PutAsJsonAsync($"/api/tickets/{ticket.Id}/privado", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+        var listado = await operador.GetFromJsonAsync<List<TicketDto>>("/api/tickets");
+        Assert.True(Assert.Single(listado!, t => t.Id == ticket.Id).Privado);
     }
 
     [Fact]
@@ -184,6 +223,55 @@ public class TicketsTests(FabricaApi factory) : IClassFixture<FabricaApi>
         var cerrado = await Accion(operador, $"/api/tickets/{id}/cerrar", new SolicitudCierre("Se aplicó la solución.", null, null, "sol-term-impresora", null));
 
         Assert.Equal("sol-term-impresora", cerrado.Solucion?.SolucionCatalogoId);
+    }
+
+    [Fact]
+    public async Task El_borrador_de_una_atencion_solo_lo_ve_su_autor_y_no_cuenta_como_ticket_registrado()
+    {
+        var autor = await ClienteConSesion("vpereira");
+        var administrador = await ClienteConSesion("scabrera");
+        var cliente = await ClienteConSesion("mtechera");
+        var clienteActual = await cliente.GetFromJsonAsync<UsuarioDto>("/api/auth/yo");
+        Assert.NotNull(clienteActual);
+        Assert.NotNull(clienteActual.LocalidadId);
+        const string registrados = "/api/tickets?incluirBorradores=false";
+        var antes = await autor.GetFromJsonAsync<List<TicketDto>>(registrados);
+        var datos = Solicitud("", clienteActual.LocalidadId) with
+        {
+            Descripcion = "La agencia informa que la impresora dejó de responder.",
+            Sistema = null,
+            Subsistema = null,
+            Criticidad = null,
+        };
+
+        var alta = await autor.PostAsJsonAsync("/api/tickets/borradores", datos);
+        alta.EnsureSuccessStatusCode();
+        var borrador = await alta.Content.ReadFromJsonAsync<TicketDto>();
+        Assert.NotNull(borrador);
+        Assert.Equal("BORRADOR", borrador.Estado);
+        Assert.Null(borrador.Numero);
+        Assert.Empty(borrador.Actividad);
+        Assert.Equal(datos.LocalidadId, borrador.LocalidadId);
+        Assert.Equal(datos.Descripcion, borrador.Descripcion);
+        Assert.Equal(Imagen, Assert.Single(borrador.Adjuntos).DataUrl);
+
+        var ruta = $"/api/tickets/borradores/{borrador.Id}";
+        var actualizacion = datos with { Descripcion = "Se pidió una captura para continuar la atención." };
+        Assert.Equal(HttpStatusCode.BadRequest, (await administrador.PutAsJsonAsync(ruta, actualizacion)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await administrador.DeleteAsync(ruta)).StatusCode);
+        (await autor.PutAsJsonAsync(ruta, actualizacion)).EnsureSuccessStatusCode();
+
+        var propios = await autor.GetFromJsonAsync<List<TicketDto>>("/api/tickets");
+        var guardado = Assert.Single(propios!, t => t.Id == borrador.Id);
+        Assert.Equal(actualizacion.Descripcion, guardado.Descripcion);
+        Assert.Equal("BORRADOR", guardado.Estado);
+        Assert.Null(guardado.Numero);
+        Assert.DoesNotContain((await administrador.GetFromJsonAsync<List<TicketDto>>("/api/tickets"))!, t => t.Id == borrador.Id);
+        Assert.DoesNotContain((await cliente.GetFromJsonAsync<List<TicketDto>>("/api/tickets"))!, t => t.Id == borrador.Id);
+
+        var despues = await autor.GetFromJsonAsync<List<TicketDto>>(registrados);
+        Assert.Equal(antes!.Select(t => t.Id), despues!.Select(t => t.Id));
+        Assert.DoesNotContain(despues!, t => t.Estado == "BORRADOR");
     }
 
     [Fact]

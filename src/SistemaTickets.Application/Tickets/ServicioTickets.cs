@@ -10,7 +10,10 @@ using SistemaTickets.Domain.Usuarios;
 
 namespace SistemaTickets.Application.Tickets;
 
-public class ErrorTicket(string mensaje) : Exception(mensaje);
+public class ErrorTicket(string mensaje, string? campo = null) : Exception(mensaje)
+{
+    public string? Campo { get; } = campo;
+}
 
 public class SinPermisoException(string mensaje) : Exception(mensaje);
 
@@ -56,8 +59,8 @@ public class ServicioTickets(
 
     private DateTime Ahora => reloj.GetUtcNow().UtcDateTime;
 
-    public Task<IReadOnlyList<Ticket>> ListarAsync(Usuario usuario, CancellationToken cancelacion = default) =>
-        tickets.ListarParaAsync(usuario, cancelacion);
+    public Task<IReadOnlyList<Ticket>> ListarAsync(Usuario usuario, bool incluirBorradores, CancellationToken cancelacion = default) =>
+        tickets.ListarParaAsync(usuario, incluirBorradores, cancelacion);
 
     public async Task<Ticket> CrearAsync(Usuario usuario, DatosTicket datos, OpcionesAlta opciones, CancellationToken cancelacion = default)
     {
@@ -68,24 +71,26 @@ public class ServicioTickets(
 
         var titulo = Limpiar(datos.Titulo);
         var descripcion = Limpiar(datos.Descripcion);
-        Exigir(titulo.Length > 0, "Escribí un título.");
-        Exigir(titulo.Length <= LargoMaximoTitulo, $"El título puede tener hasta {LargoMaximoTitulo} caracteres.");
-        Exigir(descripcion.Length > 0, "Describí el problema.");
+        Exigir(titulo.Length > 0, "Escribí un título.", "titulo");
+        Exigir(titulo.Length <= LargoMaximoTitulo, $"El título puede tener hasta {LargoMaximoTitulo} caracteres.", "titulo");
+        Exigir(descripcion.Length > 0, "Describí el problema.", "descripcion");
 
         var localidadId = usuario.Rol == Rol.Cliente ? usuario.LocalidadId : datos.LocalidadId;
         var localidad = (await localidades.ListarAsync(cancelacion)).FirstOrDefault(l => l.Id == localidadId);
-        Exigir(localidad is not null, "Elegí la localidad.");
-        Exigir(localidad!.Activa, "Esa localidad está inactiva.");
+        Exigir(localidad is not null, "Elegí la localidad.", "localidadId");
+        Exigir(localidad!.Activa, "Esa localidad está inactiva.", "localidadId");
 
         var sistema = await ItemAsync(TipoCatalogo.Sistemas, datos.Sistema, cancelacion);
-        Exigir(sistema is { Activo: true }, "Elegí el sistema o servicio afectado.");
+        Exigir(sistema is { Activo: true }, "Elegí el sistema o servicio afectado.", "sistemaId");
         var subsistema = await SubsistemaAsync(datos.Subsistema, sistema!, soloActivo: true, cancelacion);
         var criticidad = await ItemAsync(TipoCatalogo.Criticidades, datos.Criticidad, cancelacion);
-        Exigir(criticidad is not null, "Elegí la criticidad.");
+        Exigir(criticidad is { Activo: true }, "Elegí la criticidad.", "criticidadId");
+        var codigoTipo = usuario.EsOrmen ? Vacio(datos.TipoProblema) : null;
         var tipoProblema = await ItemAsync(
             TipoCatalogo.TiposProblema,
-            usuario.EsOrmen && !string.IsNullOrEmpty(datos.TipoProblema) ? datos.TipoProblema : TipoProblemaNoDefinido,
+            codigoTipo ?? TipoProblemaNoDefinido,
             cancelacion);
+        Exigir(codigoTipo is null || tipoProblema is { Activo: true }, "Elegí el tipo de problema.", "tipoProblemaId");
 
         var ahora = Ahora;
         Ticket ticket;
@@ -135,9 +140,26 @@ public class ServicioTickets(
         var titulo = Limpiar(datos.Titulo);
         var descripcion = Limpiar(datos.Descripcion);
         var localidadId = usuario.Rol == Rol.Cliente ? usuario.LocalidadId : datos.LocalidadId;
-        var tieneAlgo = titulo.Length > 0 || descripcion.Length > 0 || localidadId is not null
-            || !string.IsNullOrEmpty(datos.Sistema) || datos.Imagenes.Count > 0;
+        var localidadElegida = usuario.EsOrmen && datos.LocalidadId is not null;
+        var tipoElegido = usuario.EsOrmen && Vacio(datos.TipoProblema) is string tipo && tipo != TipoProblemaNoDefinido;
+        var tieneAlgo = titulo.Length > 0 || descripcion.Length > 0 || localidadElegida || tipoElegido
+            || Vacio(datos.Sistema) is not null || Vacio(datos.Criticidad) is not null || datos.Imagenes.Count > 0;
         Exigir(tieneAlgo, "Para guardar un borrador escribí algo.");
+        Exigir(titulo.Length <= LargoMaximoTitulo, $"El título puede tener hasta {LargoMaximoTitulo} caracteres.", "titulo");
+
+        var localidad = localidadId is null ? null
+            : (await localidades.ListarAsync(cancelacion)).FirstOrDefault(l => l.Id == localidadId);
+        Exigir(!localidadElegida || localidad is not null, "Elegí la localidad.", "localidadId");
+        var sistema = await ItemAsync(TipoCatalogo.Sistemas, datos.Sistema, cancelacion);
+        Exigir(Vacio(datos.Sistema) is null || sistema is not null, "Elegí el sistema o servicio afectado.", "sistemaId");
+        var subsistema = (await ItemAsync(TipoCatalogo.Subsistemas, datos.Subsistema, cancelacion)) as Subsistema;
+        Exigir(Vacio(datos.Subsistema) is null || (subsistema is not null && subsistema.SistemaId == sistema?.Id),
+            "Ese subsistema no corresponde al sistema elegido.", "subsistemaId");
+        var criticidad = await ItemAsync(TipoCatalogo.Criticidades, datos.Criticidad, cancelacion);
+        Exigir(Vacio(datos.Criticidad) is null || criticidad is not null, "Elegí la criticidad.", "criticidadId");
+        var tipoProblema = await ItemAsync(TipoCatalogo.TiposProblema,
+            (usuario.EsOrmen ? Vacio(datos.TipoProblema) : null) ?? TipoProblemaNoDefinido, cancelacion);
+        Exigir(!tipoElegido || tipoProblema is not null, "Elegí el tipo de problema.", "tipoProblemaId");
 
         var ahora = Ahora;
         Ticket ticket;
@@ -151,15 +173,13 @@ public class ServicioTickets(
             tickets.Agregar(ticket);
         }
 
-        var sistema = await ItemAsync(TipoCatalogo.Sistemas, datos.Sistema, cancelacion);
-        var subsistema = (await ItemAsync(TipoCatalogo.Subsistemas, datos.Subsistema, cancelacion)) as Subsistema;
         ticket.Titulo = titulo;
         ticket.Descripcion = descripcion;
-        ticket.LocalidadId = (await localidades.ListarAsync(cancelacion)).FirstOrDefault(l => l.Id == localidadId)?.Id;
+        ticket.LocalidadId = localidad?.Id;
         ticket.SistemaId = sistema?.Id;
-        ticket.SubsistemaId = subsistema is not null && subsistema.SistemaId == sistema?.Id ? subsistema.Id : null;
-        ticket.CriticidadId = (await ItemAsync(TipoCatalogo.Criticidades, datos.Criticidad, cancelacion))?.Id;
-        ticket.TipoProblemaId = (await ItemAsync(TipoCatalogo.TiposProblema, datos.TipoProblema ?? TipoProblemaNoDefinido, cancelacion))?.Id;
+        ticket.SubsistemaId = subsistema?.Id;
+        ticket.CriticidadId = criticidad?.Id;
+        ticket.TipoProblemaId = tipoProblema?.Id;
         ticket.ReemplazarAdjuntosDescripcion(Adjuntos(datos.Imagenes, OrigenAdjunto.Descripcion, usuario.Id, ahora));
         ticket.Tocar(ahora);
 
@@ -189,7 +209,7 @@ public class ServicioTickets(
         }
 
         var limpio = Limpiar(texto);
-        Exigir(limpio.Length > 0, "Escribí el comentario.");
+        Exigir(limpio.Length > 0, "Escribí el comentario.", "texto");
         var ahora = Ahora;
         var comentario = ticket.Comentar(usuario.Id, ahora, limpio, usuario.EsOrmen && privado);
         ticket.AgregarAdjuntos(Adjuntos(imagenes, OrigenAdjunto.Comentario, usuario.Id, ahora, comentario));
@@ -215,10 +235,11 @@ public class ServicioTickets(
         TratarAsync(usuario, id, async ticket =>
         {
             var limpio = Limpiar(motivo);
-            Exigir(limpio.Length > 0, "Escribí por qué se eleva.");
+            Exigir(limpio.Length > 0, "Escribí por qué se eleva.", "motivo");
+            Exigir((Vacio(grupo) is null) != (Vacio(persona) is null), "Elegí un único destinatario.", "destino");
             int? grupoId = null;
             int? usuarioId = null;
-            if (!string.IsNullOrEmpty(grupo))
+            if (Vacio(grupo) is not null)
             {
                 var item = await ItemAsync(TipoCatalogo.GruposSoporte, grupo, cancelacion);
                 Exigir(item is not null, "Elegí a quién se eleva.");
@@ -237,7 +258,7 @@ public class ServicioTickets(
         TratarAsync(usuario, id, ticket =>
         {
             var limpio = Limpiar(texto);
-            Exigir(limpio.Length > 0, "Escribí qué factor externo lo detiene.");
+            Exigir(limpio.Length > 0, "Escribí qué factor externo lo detiene.", "texto");
             ticket.Bloquear(limpio, privado, usuario.Id, Ahora);
             return Task.CompletedTask;
         }, cancelacion);
@@ -253,12 +274,12 @@ public class ServicioTickets(
         TratarAsync(usuario, id, async ticket =>
         {
             var nuevoSistema = await ItemAsync(TipoCatalogo.Sistemas, sistema, cancelacion);
-            Exigir(nuevoSistema is not null, "Elegí el sistema o servicio afectado.");
+            Exigir(nuevoSistema is not null, "Elegí el sistema o servicio afectado.", "sistemaId");
             var nuevoSubsistema = await SubsistemaAsync(subsistema, nuevoSistema!, soloActivo: false, cancelacion);
             var nuevaCriticidad = await ItemAsync(TipoCatalogo.Criticidades, criticidad, cancelacion);
-            Exigir(nuevaCriticidad is not null, "Elegí la criticidad.");
+            Exigir(nuevaCriticidad is not null, "Elegí la criticidad.", "criticidadId");
             var nuevoTipo = await ItemAsync(TipoCatalogo.TiposProblema, tipoProblema, cancelacion);
-            Exigir(nuevoTipo is not null, "Elegí el tipo de problema.");
+            Exigir(nuevoTipo is not null, "Elegí el tipo de problema.", "tipoProblemaId");
 
             var cambios = new List<CambioClasificacion>();
             await CompararAsync(cambios, "sistemaId", "Sistema", TipoCatalogo.Sistemas, ticket.SistemaId, nuevoSistema, cancelacion);
@@ -276,12 +297,12 @@ public class ServicioTickets(
         TratarAsync(usuario, id, async ticket =>
         {
             var texto = Limpiar(datos.Texto);
-            Exigir(texto.Length > 0, "Escribí la resolución.");
+            Exigir(texto.Length > 0, "Escribí la resolución.", "solucionTexto");
             ItemCatalogo? tipo = null;
             if (!string.IsNullOrEmpty(datos.TipoProblema))
             {
                 tipo = await ItemAsync(TipoCatalogo.TiposProblema, datos.TipoProblema, cancelacion);
-                Exigir(tipo is not null, "Elegí el tipo de problema.");
+                Exigir(tipo is not null, "Elegí el tipo de problema.", "tipoProblemaId");
             }
 
             var solucionAplicada = await SolucionAplicadaAsync(datos.SolucionCatalogoId, cancelacion);
@@ -376,16 +397,18 @@ public class ServicioTickets(
         }
 
         var solucion = (await soluciones.ListarAsync(cancelacion)).FirstOrDefault(s => s.Codigo == codigo.Trim());
-        Exigir(solucion is null || solucion.Estado == EstadoSolucion.Aprobada, "La solución reutilizable elegida ya no está aprobada.");
+        Exigir(solucion is { Estado: EstadoSolucion.Aprobada }, "La solución reutilizable elegida no existe o no está aprobada.");
         return solucion?.Id;
     }
 
     private async Task<ItemCatalogo?> ItemAsync(TipoCatalogo tipo, string? codigo, CancellationToken cancelacion) =>
-        string.IsNullOrEmpty(codigo) ? null : (await catalogos.ListarAsync(tipo, cancelacion)).FirstOrDefault(x => x.Codigo == codigo);
+        Vacio(codigo) is string limpio
+            ? (await catalogos.ListarAsync(tipo, cancelacion)).FirstOrDefault(x => x.Codigo == limpio)
+            : null;
 
     private async Task<Subsistema?> SubsistemaAsync(string? codigo, ItemCatalogo sistema, bool soloActivo, CancellationToken cancelacion)
     {
-        if (string.IsNullOrEmpty(codigo))
+        if (Vacio(codigo) is null)
         {
             return null;
         }
@@ -393,7 +416,7 @@ public class ServicioTickets(
         var subsistema = await ItemAsync(TipoCatalogo.Subsistemas, codigo, cancelacion) as Subsistema;
         Exigir(
             subsistema is not null && subsistema.SistemaId == sistema.Id && (!soloActivo || subsistema.Activo),
-            "Ese subsistema no corresponde al sistema elegido.");
+            "Ese subsistema no corresponde al sistema elegido.", "subsistemaId");
         return subsistema;
     }
 
@@ -437,11 +460,11 @@ public class ServicioTickets(
 
     private static string? Vacio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 
-    private static void Exigir(bool condicion, string mensaje)
+    private static void Exigir(bool condicion, string mensaje, string? campo = null)
     {
         if (!condicion)
         {
-            throw new ErrorTicket(mensaje);
+            throw new ErrorTicket(mensaje, campo);
         }
     }
 }

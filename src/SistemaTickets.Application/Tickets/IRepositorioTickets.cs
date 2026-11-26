@@ -5,7 +5,7 @@ namespace SistemaTickets.Application.Tickets;
 
 public interface IRepositorioTickets
 {
-    Task<IReadOnlyList<Ticket>> ListarParaAsync(Usuario usuario, CancellationToken cancelacion = default);
+    Task<IReadOnlyList<Ticket>> ListarParaAsync(Usuario usuario, bool incluirBorradores, CancellationToken cancelacion = default);
 
     Task<Ticket?> BuscarAsync(int id, CancellationToken cancelacion = default);
 
