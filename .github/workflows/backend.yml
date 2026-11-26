@@ -14,10 +14,22 @@ jobs:
   verificar:
     name: Compilar y probar
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tickets-backend
     outputs:
       entorno: ${{ steps.entorno.outputs.nombre }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: tickets-backend
+
+      - uses: actions/checkout@v4
+        with:
+          repository: rzurita123/tickets-frontend
+          ref: main
+          path: tickets-frontend
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -35,7 +47,7 @@ jobs:
         if: github.event_name != 'pull_request'
         with:
           name: api
-          path: publicacion
+          path: tickets-backend/publicacion
           retention-days: 7
 
       - name: Elegir el entorno
