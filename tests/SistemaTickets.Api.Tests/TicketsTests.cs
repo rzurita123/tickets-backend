@@ -217,6 +217,33 @@ public class TicketsTests(FabricaApi factory) : IClassFixture<FabricaApi>
     }
 
     [Fact]
+    public async Task El_listado_filtra_por_fecha_de_creacion()
+    {
+        var operador = await ClienteConSesion("vpereira");
+        var ticket = await Crear(await ClienteConSesion("mtechera"), Solicitud("Filtro por fecha"));
+        var ahora = DateTimeOffset.UtcNow;
+        string Fecha(DateTimeOffset f) => Uri.EscapeDataString(f.ToString("O"));
+
+        var dentro = await operador.GetFromJsonAsync<PaginaDto<TicketResumenDto>>(
+            $"/api/tickets/listado?desde={Fecha(ahora.AddHours(-1))}&hasta={Fecha(ahora.AddHours(1))}&porPagina=100");
+        var antes = await operador.GetFromJsonAsync<PaginaDto<TicketResumenDto>>(
+            $"/api/tickets/listado?hasta={Fecha(ahora.AddHours(-1))}&porPagina=100");
+
+        Assert.Contains(dentro!.Items, t => t.Id == ticket.Id);
+        Assert.DoesNotContain(antes!.Items, t => t.Id == ticket.Id);
+    }
+
+    [Fact]
+    public async Task Un_rango_de_fechas_invertido_devuelve_400()
+    {
+        var operador = await ClienteConSesion("vpereira");
+
+        var respuesta = await operador.GetAsync("/api/tickets/listado?desde=2026-11-20T00:00:00Z&hasta=2026-11-10T00:00:00Z");
+
+        Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+    }
+
+    [Fact]
     public async Task El_detalle_de_otra_localidad_devuelve_404()
     {
         var pando = await ClienteConSesion("mtechera");

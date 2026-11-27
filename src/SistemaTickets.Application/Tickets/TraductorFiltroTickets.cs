@@ -33,6 +33,11 @@ public class TraductorFiltroTickets(ICatalogoLectura catalogos, IRepositorioUsua
             operadorId = operador.Id;
         }
 
+        if (f.Desde is { } desde && f.Hasta is { } hasta && desde >= hasta)
+        {
+            throw new ErrorTicket("La fecha desde tiene que ser anterior a la fecha hasta.");
+        }
+
         return new CriteriosTickets(
             EstadosDe(f.Estado),
             f.LocalidadId,
@@ -45,7 +50,9 @@ public class TraductorFiltroTickets(ICatalogoLectura catalogos, IRepositorioUsua
             await catalogos.IdAsync(TipoCatalogo.Criticidades, CriticidadAlta, cancelacion),
             await catalogos.IdAsync(TipoCatalogo.Criticidades, CriticidadMedia, cancelacion),
             Math.Max(1, f.Pagina),
-            f.PorPagina <= 0 ? opciones.PorPaginaPorDefecto : Math.Min(f.PorPagina, opciones.PorPaginaMaximo));
+            f.PorPagina <= 0 ? opciones.PorPaginaPorDefecto : Math.Min(f.PorPagina, opciones.PorPaginaMaximo),
+            f.Desde?.UtcDateTime,
+            f.Hasta?.UtcDateTime);
     }
 
     private static IReadOnlyList<EstadoTicket>? EstadosDe(string? estado) => estado switch
