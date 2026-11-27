@@ -226,6 +226,19 @@ public class TicketsTests(FabricaApi factory) : IClassFixture<FabricaApi>
     }
 
     [Fact]
+    public async Task El_cierre_con_una_solucion_desconocida_cierra_sin_vincularla()
+    {
+        var operador = await ClienteConSesion("vpereira");
+        var id = (await Crear(operador, Solicitud("Con solución local", localidadId: 7))).Id;
+        await Accion(operador, $"/api/tickets/{id}/asignar", new SolicitudAsignar("vpereira"));
+
+        var cerrado = await Accion(operador, $"/api/tickets/{id}/cerrar", new SolicitudCierre("Se aplicó la solución.", null, null, "sol-solo-en-el-navegador", null));
+
+        Assert.Equal("CERRADO", cerrado.Estado);
+        Assert.Null(cerrado.Solucion?.SolucionCatalogoId);
+    }
+
+    [Fact]
     public async Task El_borrador_de_una_atencion_solo_lo_ve_su_autor_y_no_cuenta_como_ticket_registrado()
     {
         var autor = await ClienteConSesion("vpereira");

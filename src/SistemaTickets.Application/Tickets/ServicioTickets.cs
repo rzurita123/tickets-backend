@@ -388,7 +388,8 @@ public class ServicioTickets(
         }
 
         var solucion = (await soluciones.ListarAsync(cancelacion)).FirstOrDefault(s => s.Codigo == codigo.Trim());
-        Exigir(solucion is { Estado: EstadoSolucion.Aprobada }, "La solución reutilizable elegida no existe o no está aprobada.");
+        // Las soluciones creadas en el frontend todavía no están en la Api: si no existe, se cierra sin vincularla.
+        Exigir(solucion is null || solucion.Estado == EstadoSolucion.Aprobada, "La solución reutilizable elegida ya no está aprobada.");
         return solucion?.Id;
     }
 
