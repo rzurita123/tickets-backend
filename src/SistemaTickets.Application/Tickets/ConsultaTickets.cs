@@ -13,7 +13,9 @@ public record FiltroTickets(
     string? Texto,
     string? Orden,
     int Pagina = 1,
-    int PorPagina = 15);
+    int PorPagina = 15,
+    DateTimeOffset? Desde = null,
+    DateTimeOffset? Hasta = null);
 
 /// El mismo filtro, ya validado y traducido a ids para la base.
 public record CriteriosTickets(
@@ -28,7 +30,9 @@ public record CriteriosTickets(
     int? CriticidadAltaId,
     int? CriticidadMediaId,
     int Pagina,
-    int PorPagina);
+    int PorPagina,
+    DateTime? Desde = null,
+    DateTime? Hasta = null);
 
 public record PaginaTickets(IReadOnlyList<Ticket> Items, int Total, int Pagina, int PorPagina);
 

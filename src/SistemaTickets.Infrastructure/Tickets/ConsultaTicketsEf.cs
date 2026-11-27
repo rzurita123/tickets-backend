@@ -71,6 +71,17 @@ public class ConsultaTicketsEf(ContextoTickets contexto) : IConsultaTickets
             }
         }
 
+        // Desde incluido, hasta excluido.
+        if (c.Desde is DateTime desde)
+        {
+            q = q.Where(t => t.CreadoEn >= desde);
+        }
+
+        if (c.Hasta is DateTime hasta)
+        {
+            q = q.Where(t => t.CreadoEn < hasta);
+        }
+
         if (!string.IsNullOrWhiteSpace(c.Texto))
         {
             var texto = c.Texto.Trim().TrimStart('#');
