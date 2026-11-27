@@ -1,6 +1,8 @@
 using System.Text.Json;
+using SistemaTickets.Application.Auditoria;
 using SistemaTickets.Application.Catalogos;
 using SistemaTickets.Application.Localidades;
+using SistemaTickets.Application.Notificaciones;
 using SistemaTickets.Application.Soluciones;
 using SistemaTickets.Application.Usuarios;
 using SistemaTickets.Domain.Catalogos;
@@ -52,6 +54,8 @@ public class ServicioTickets(
     IRepositorioLocalidades localidades,
     IRepositorioCatalogos catalogos,
     IRepositorioSoluciones soluciones,
+    IAuditoria auditoria,
+    INotificaciones notificaciones,
     TimeProvider reloj)
 {
     public const string TipoProblemaNoDefinido = "tp-nodef";
@@ -132,6 +136,10 @@ public class ServicioTickets(
         });
 
         await tickets.GuardarAsync(cancelacion);
+        var resumen = $"#{ticket.Numero} · {ticket.Titulo}";
+        Auditar(usuario, opciones.RegistroDirecto ? OperacionesAuditoria.TicketCerradoDirecto : OperacionesAuditoria.TicketCreado, ticket,
+            opciones.RegistroDirecto || !desdeBorrador ? resumen : resumen + " (desde un borrador)");
+        await auditoria.GuardarAsync(cancelacion);
         return ticket;
     }
 
@@ -184,6 +192,8 @@ public class ServicioTickets(
         ticket.Tocar(ahora);
 
         await tickets.GuardarAsync(cancelacion);
+        auditoria.Registrar(usuario.Id, OperacionesAuditoria.BorradorGuardado, EntidadesAuditoria.Borrador, ticket.Id.ToString(), NombreBorrador(ticket));
+        await auditoria.GuardarAsync(cancelacion);
         return ticket;
     }
 
@@ -195,6 +205,7 @@ public class ServicioTickets(
             return false;
         }
 
+        auditoria.Registrar(usuario.Id, OperacionesAuditoria.BorradorDescartado, EntidadesAuditoria.Borrador, ticket.Id.ToString(), NombreBorrador(ticket));
         tickets.Eliminar(ticket);
         await tickets.GuardarAsync(cancelacion);
         return true;
@@ -211,8 +222,15 @@ public class ServicioTickets(
         var limpio = Limpiar(texto);
         Exigir(limpio.Length > 0, "Escribí el comentario.", "texto");
         var ahora = Ahora;
-        var comentario = ticket.Comentar(usuario.Id, ahora, limpio, usuario.EsOrmen && privado);
+        var esPrivado = usuario.EsOrmen && privado;
+        var comentario = ticket.Comentar(usuario.Id, ahora, limpio, esPrivado);
         ticket.AgregarAdjuntos(Adjuntos(imagenes, OrigenAdjunto.Comentario, usuario.Id, ahora, comentario));
+        Auditar(usuario, esPrivado ? OperacionesAuditoria.ComentarioPrivado : OperacionesAuditoria.ComentarioPublico, ticket, TextoAuditoria.Truncar(limpio, 90));
+        if (usuario.EsOrmen && !esPrivado)
+        {
+            await AvisarAsync(ticket, usuario, MotivoAviso.Comentario, Mensaje(limpio), cancelacion);
+        }
+
         await tickets.GuardarAsync(cancelacion);
         return ticket;
     }
@@ -221,13 +239,22 @@ public class ServicioTickets(
         TratarAsync(usuario, id, async ticket =>
         {
             var persona = await PersonaOrmenAsync(operador, cancelacion);
+            var de = ticket.Estado;
             ticket.Asignar(persona.Id, usuario.Id, Ahora);
+            Auditar(usuario, OperacionesAuditoria.Asignacion, ticket,
+                $"Atiende: {persona.Nombre}" + (de != ticket.Estado ? $" · {Cambio(de, ticket.Estado)}" : string.Empty));
+            if (de != ticket.Estado)
+            {
+                await AvisarAsync(ticket, usuario, MotivoAviso.EnProceso, null, cancelacion);
+            }
         }, cancelacion);
 
     public Task<Ticket?> LiberarAsync(Usuario usuario, int id, CancellationToken cancelacion = default) =>
         TratarAsync(usuario, id, ticket =>
         {
+            var de = ticket.Estado;
             ticket.Liberar(usuario.Id, Ahora);
+            Auditar(usuario, OperacionesAuditoria.Liberacion, ticket, $"{Cambio(de, ticket.Estado)} · sin asignar");
             return Task.CompletedTask;
         }, cancelacion);
 
@@ -239,35 +266,48 @@ public class ServicioTickets(
             Exigir((Vacio(grupo) is null) != (Vacio(persona) is null), "Elegí un único destinatario.", "destino");
             int? grupoId = null;
             int? usuarioId = null;
+            string destino;
             if (Vacio(grupo) is not null)
             {
                 var item = await ItemAsync(TipoCatalogo.GruposSoporte, grupo, cancelacion);
                 Exigir(item is not null, "Elegí a quién se eleva.");
                 Exigir(item!.Activo, "Ese grupo está inactivo.");
                 grupoId = item.Id;
+                destino = item.Nombre;
             }
             else
             {
-                usuarioId = (await PersonaOrmenAsync(persona, cancelacion)).Id;
+                var elegido = await PersonaOrmenAsync(persona, cancelacion);
+                usuarioId = elegido.Id;
+                destino = elegido.Nombre;
             }
 
             ticket.Elevar(grupoId, usuarioId, limpio, usuario.Id, Ahora);
+            Auditar(usuario, OperacionesAuditoria.Elevacion, ticket, $"Elevado a {destino} · {TextoAuditoria.Truncar(limpio, 70)}");
+            await AvisarAsync(ticket, usuario, MotivoAviso.Elevado,
+                $"Lo derivamos a {destino} para revisarlo. Te avisamos por acá apenas tengamos novedades.", cancelacion);
         }, cancelacion);
 
     public Task<Ticket?> BloquearAsync(Usuario usuario, int id, string? texto, bool privado, CancellationToken cancelacion = default) =>
-        TratarAsync(usuario, id, ticket =>
+        TratarAsync(usuario, id, async ticket =>
         {
             var limpio = Limpiar(texto);
             Exigir(limpio.Length > 0, "Escribí qué factor externo lo detiene.", "texto");
+            var de = ticket.Estado;
             ticket.Bloquear(limpio, privado, usuario.Id, Ahora);
-            return Task.CompletedTask;
+            Auditar(usuario, OperacionesAuditoria.Bloqueo, ticket, $"{Cambio(de, ticket.Estado)} · {TextoAuditoria.Truncar(limpio, 70)}");
+            await AvisarAsync(ticket, usuario, MotivoAviso.Bloqueado, privado ? null : Mensaje(limpio), cancelacion);
         }, cancelacion);
 
     public Task<Ticket?> DesbloquearAsync(Usuario usuario, int id, string? texto, CancellationToken cancelacion = default) =>
-        TratarAsync(usuario, id, ticket =>
+        TratarAsync(usuario, id, async ticket =>
         {
-            ticket.Desbloquear(Vacio(texto), usuario.Id, Ahora);
-            return Task.CompletedTask;
+            var de = ticket.Estado;
+            var limpio = Vacio(texto);
+            ticket.Desbloquear(limpio, usuario.Id, Ahora);
+            Auditar(usuario, OperacionesAuditoria.Desbloqueo, ticket,
+                Cambio(de, ticket.Estado) + (limpio is null ? string.Empty : $" · {TextoAuditoria.Truncar(limpio, 70)}"));
+            await AvisarAsync(ticket, usuario, MotivoAviso.Estado, null, cancelacion);
         }, cancelacion);
 
     public Task<Ticket?> ReclasificarAsync(Usuario usuario, int id, string? sistema, string? subsistema, string? criticidad, string? tipoProblema, CancellationToken cancelacion = default) =>
@@ -291,6 +331,7 @@ public class ServicioTickets(
             ticket.Reclasificar(
                 nuevoSistema!.Id, nuevoSubsistema?.Id, nuevaCriticidad!.Id, nuevoTipo!.Id,
                 JsonSerializer.Serialize(cambios, JsonSerializerOptions.Web), usuario.Id, Ahora);
+            Auditar(usuario, OperacionesAuditoria.Datos, ticket, string.Join(" · ", cambios.Select(c => $"{c.Etiqueta}: {c.De} → {c.A}")));
         }, cancelacion);
 
     public Task<Ticket?> CerrarAsync(Usuario usuario, int id, DatosCierre datos, CancellationToken cancelacion = default) =>
@@ -308,21 +349,34 @@ public class ServicioTickets(
             var solucionAplicada = await SolucionAplicadaAsync(datos.SolucionCatalogoId, cancelacion);
             var ahora = Ahora;
             var mensaje = Limpiar(datos.MensajePublico);
-            if (mensaje.Length > 0 && ticket.Estado != EstadoTicket.Cerrado)
+            var conMensaje = mensaje.Length > 0 && ticket.Estado != EstadoTicket.Cerrado;
+            if (conMensaje)
             {
                 ticket.Comentar(usuario.Id, ahora, mensaje, privada: false);
             }
 
+            var de = ticket.Estado;
             ticket.Cerrar(
                 texto, solucionAplicada, tipo?.Id,
                 Adjuntos(datos.Imagenes, OrigenAdjunto.Resolucion, usuario.Id, ahora), usuario.Id, ahora);
+            if (conMensaje)
+            {
+                Auditar(usuario, OperacionesAuditoria.ComentarioPublico, ticket, TextoAuditoria.Truncar(mensaje, 90));
+            }
+
+            Auditar(usuario, OperacionesAuditoria.Cierre, ticket, Cambio(de, ticket.Estado));
+            await AvisarAsync(ticket, usuario, MotivoAviso.Cierre, conMensaje ? Mensaje(mensaje) : null, cancelacion);
         }, cancelacion);
 
     public Task<Ticket?> ReabrirAsync(Usuario usuario, int id, string? motivo, CancellationToken cancelacion = default) =>
-        TratarAsync(usuario, id, ticket =>
+        TratarAsync(usuario, id, async ticket =>
         {
-            ticket.Reabrir(Vacio(motivo), usuario.Id, Ahora);
-            return Task.CompletedTask;
+            var de = ticket.Estado;
+            var limpio = Vacio(motivo);
+            ticket.Reabrir(limpio, usuario.Id, Ahora);
+            Auditar(usuario, OperacionesAuditoria.Reapertura, ticket,
+                Cambio(de, ticket.Estado) + (limpio is null ? string.Empty : $" · {TextoAuditoria.Truncar(limpio, 70)}"));
+            await AvisarAsync(ticket, usuario, MotivoAviso.Reapertura, null, cancelacion);
         }, cancelacion);
 
     public Task<Ticket?> CambiarPrivadoAsync(Usuario usuario, int id, bool privado, CancellationToken cancelacion = default) =>
@@ -331,6 +385,7 @@ public class ServicioTickets(
             var creador = await usuarios.BuscarPorIdAsync(ticket.CreadoPorId, cancelacion);
             Exigir(creador?.Rol != Rol.Cliente, "Este ticket lo creó la localidad: no se puede hacer privado.");
             ticket.CambiarPrivado(privado, usuario.Id, Ahora);
+            Auditar(usuario, OperacionesAuditoria.Privacidad, ticket, privado ? "Marcado como privado" : "Visible para la localidad");
         }, cancelacion);
 
     public static bool PuedeVer(Ticket ticket, Usuario usuario) => VisibilidadTickets.PuedeVer(ticket, usuario);
@@ -447,6 +502,27 @@ public class ServicioTickets(
             throw new ErrorTicket(e.Message);
         }
     }
+
+    private void Auditar(Usuario usuario, string operacion, Ticket ticket, string detalle) =>
+        auditoria.Registrar(usuario.Id, operacion, EntidadesAuditoria.Ticket, ticket.Id.ToString(), detalle);
+
+    private async Task AvisarAsync(Ticket ticket, Usuario actor, MotivoAviso motivo, string? detalle, CancellationToken cancelacion)
+    {
+        var creador = await usuarios.BuscarPorIdAsync(ticket.CreadoPorId, cancelacion);
+        if (AvisosTicket.Componer(ticket, creador, actor, motivo, detalle, Ahora) is { } aviso)
+        {
+            notificaciones.Encolar(aviso);
+        }
+    }
+
+    private static string Cambio(EstadoTicket de, EstadoTicket a) => $"{AvisosTicket.NombreEstado(de)} → {AvisosTicket.NombreEstado(a)}";
+
+    private static string Mensaje(string texto) => $"Mensaje de Mesa de ayuda:\n\"{texto}\"";
+
+    private static string NombreBorrador(Ticket ticket) =>
+        ticket.Titulo.Length > 0 ? ticket.Titulo
+        : ticket.Descripcion.Length > 0 ? TextoAuditoria.Truncar(ticket.Descripcion, 60)
+        : "Sin título";
 
     private static string Limpiar(string? texto) => (texto ?? string.Empty).Trim();
 

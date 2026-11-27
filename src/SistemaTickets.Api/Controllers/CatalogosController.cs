@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SistemaTickets.Api.Seguridad;
 using SistemaTickets.Application.Catalogos;
 using SistemaTickets.Domain.Catalogos;
 using SistemaTickets.Domain.Usuarios;
@@ -46,7 +47,7 @@ public class CatalogosController(ServicioCatalogos catalogos) : ControllerBase
     {
         try
         {
-            var item = await catalogos.CrearAsync(tipo, solicitud.Nombre, solicitud.Sistema, cancelacion);
+            var item = await catalogos.CrearAsync(tipo, solicitud.Nombre, solicitud.Sistema, User.IdUsuario(), cancelacion);
             return await Dto(item, cancelacion);
         }
         catch (ErrorCatalogo e)
@@ -61,7 +62,7 @@ public class CatalogosController(ServicioCatalogos catalogos) : ControllerBase
     {
         try
         {
-            var item = await catalogos.ModificarAsync(tipo, codigo, solicitud.Nombre, solicitud.Activo, cancelacion);
+            var item = await catalogos.ModificarAsync(tipo, codigo, solicitud.Nombre, solicitud.Activo, User.IdUsuario(), cancelacion);
             return item is null ? NotFound() : await Dto(item, cancelacion);
         }
         catch (ErrorCatalogo e)

@@ -1,6 +1,8 @@
 ﻿using SistemaTickets.Api.Controllers;
 using SistemaTickets.Api.Seguridad;
 using SistemaTickets.Application.Catalogos;
+using SistemaTickets.Application.Favoritos;
+using SistemaTickets.Application.Soluciones;
 using SistemaTickets.Application.Tickets;
 using SistemaTickets.Application.Usuarios;
 
@@ -14,6 +16,9 @@ public static class RegistroServicios
         servicios.AddScoped<ServicioIngreso>();
         servicios.AddScoped<ServicioCatalogos>();
         servicios.AddScoped<ServicioTickets>();
+        servicios.AddScoped<ServicioSoluciones>();
+        servicios.AddScoped<ServicioParametros>();
+        servicios.AddScoped<ServicioFavoritos>();
         servicios.AddScoped<ServicioConsultaTickets>();
         servicios.AddScoped<TraductorFiltroTickets>();
         servicios.AddScoped<MapeadorTickets>();
