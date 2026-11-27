@@ -10,11 +10,12 @@ public class RepositorioTickets(ContextoTickets contexto) : IRepositorioTickets
 {
     private const int PrimerNumero = 1001;
 
-    public async Task<IReadOnlyList<Ticket>> ListarParaAsync(Usuario usuario, CancellationToken cancelacion = default)
+    public async Task<IReadOnlyList<Ticket>> ListarParaAsync(Usuario usuario, bool incluirBorradores, CancellationToken cancelacion = default)
     {
         return await Completos()
             .AsNoTracking()
             .Where(VisibilidadTickets.Para(usuario))
+            .Where(t => incluirBorradores || t.Estado != EstadoTicket.Borrador)
             .OrderBy(t => t.Id)
             .ToListAsync(cancelacion);
     }

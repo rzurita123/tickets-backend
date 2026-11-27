@@ -24,7 +24,7 @@ public class AuthController(ServicioIngreso ingreso, IRepositorioUsuarios usuari
     [AllowAnonymous]
     public async Task<ActionResult<RespuestaIngreso>> Ingresar(SolicitudIngreso solicitud, CancellationToken cancelacion)
     {
-        if (string.IsNullOrWhiteSpace(solicitud.Usuario) || string.IsNullOrEmpty(solicitud.Contrasena))
+        if (string.IsNullOrWhiteSpace(solicitud.Usuario) || string.IsNullOrWhiteSpace(solicitud.Contrasena))
         {
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Usuario y contraseña son obligatorios.");
         }

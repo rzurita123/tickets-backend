@@ -53,7 +53,7 @@ public record SolicitudClasificacion(string? Sistema, string? Subsistema, string
 
 public record SolicitudCierre(string? Texto, string? MensajePublico, string? TipoProblema, string? SolucionCatalogoId, List<ImagenSolicitud>? Adjuntos);
 
-public record SolicitudPrivado(bool Privado);
+public record SolicitudPrivado(bool? Privado);
 
 public class MapeadorTickets(IRepositorioUsuarios usuarios, ICatalogoLectura catalogos, IRepositorioSoluciones soluciones)
 {
