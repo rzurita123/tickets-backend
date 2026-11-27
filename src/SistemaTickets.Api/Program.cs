@@ -2,7 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using SistemaTickets.Api.Controllers;
+using SistemaTickets.Api.Configuracion;
+using SistemaTickets.Api.Middleware;
 using SistemaTickets.Api.Seguridad;
 using SistemaTickets.Application.Catalogos;
 using SistemaTickets.Application.Tickets;
@@ -45,10 +46,10 @@ builder.Services.Configure<OpcionesJwt>(o =>
 builder.Services.AddSingleton<IHashContrasenas, HashContrasenasPbkdf2>();
 builder.Services.AddPersistencia(cadenaConexion);
 builder.Services.AddSingleton<IGeneradorToken, GeneradorTokenJwt>();
-builder.Services.AddScoped<ServicioIngreso>();
-builder.Services.AddScoped<ServicioCatalogos>();
-builder.Services.AddScoped<ServicioTickets>();
-builder.Services.AddScoped<MapeadorTickets>();
+builder.Services.AddAplicacion(configuracion);
+builder.Services.AddUsuarioActual();
+builder.Services.AddExceptionHandler<ManejadorExcepciones>();
+builder.Services.AddProblemDetails();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -63,7 +64,7 @@ builder.Services
             ClockSkew = TimeSpan.FromMinutes(1),
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(o => o.AgregarPoliticas());
 
 var origenes = configuracion.GetSection("Cors:Origenes").Get<string[]>() ?? [];
 builder.Services.AddCors(o => o.AddPolicy(PoliticaCors, p =>
@@ -89,6 +90,7 @@ if (app.Environment.IsDevelopment())
 }
 await app.Services.PrepararBaseAsync(configuracion["UsuariosIniciales:Contrasena"]);
 
+app.UseExceptionHandler();
 app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();

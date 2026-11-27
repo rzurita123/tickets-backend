@@ -165,7 +165,77 @@ public class TicketsTests(FabricaApi factory) : IClassFixture<FabricaApi>
         var descartable = await otro.Content.ReadFromJsonAsync<TicketDto>();
         Assert.Equal(HttpStatusCode.NoContent, (await pando.DeleteAsync($"/api/tickets/borradores/{descartable!.Id}")).StatusCode);
     }
+    [Fact]
+    public async Task El_listado_de_un_cliente_ignora_el_filtro_de_localidad()
+    {
+        var pando = await ClienteConSesion("mtechera");
+        var lagomar = await ClienteConSesion("lgomez");
+        var deLagomar = await Crear(lagomar, Solicitud("Ticket de Lagomar"));
+        var dePando = await Crear(pando, Solicitud("Ticket de Pando"));
 
+        var pagina = await pando.GetFromJsonAsync<PaginaDto<TicketResumenDto>>(
+            $"/api/tickets/listado?localidadId={deLagomar.LocalidadId}&porPagina=100");
+
+        Assert.Contains(pagina!.Items, t => t.Id == dePando.Id);
+        Assert.DoesNotContain(pagina.Items, t => t.Id == deLagomar.Id);
+        Assert.All(pagina.Items, t => Assert.Equal(dePando.LocalidadId, t.LocalidadId));
+    }
+
+    [Fact]
+    public async Task Un_operador_filtra_el_listado_por_localidad_y_estado()
+    {
+        var operador = await ClienteConSesion("vpereira");
+        var pando = await Crear(await ClienteConSesion("mtechera"), Solicitud("Filtro Pando"));
+        var lagomar = await Crear(await ClienteConSesion("lgomez"), Solicitud("Filtro Lagomar"));
+
+        var pagina = await operador.GetFromJsonAsync<PaginaDto<TicketResumenDto>>(
+            $"/api/tickets/listado?localidadId={pando.LocalidadId}&estado=ABIERTO&porPagina=100");
+
+        Assert.Contains(pagina!.Items, t => t.Id == pando.Id);
+        Assert.DoesNotContain(pagina.Items, t => t.Id == lagomar.Id);
+        Assert.All(pagina.Items, t =>
+        {
+            Assert.Equal(pando.LocalidadId, t.LocalidadId);
+            Assert.Equal("ABIERTO", t.Estado);
+        });
+    }
+
+    [Fact]
+    public async Task El_listado_pagina_y_devuelve_el_total()
+    {
+        var operador = await ClienteConSesion("vpereira");
+        var pando = await ClienteConSesion("mtechera");
+        for (var i = 0; i < 3; i++)
+        {
+            await Crear(pando, Solicitud($"Paginado {i}"));
+        }
+
+        var pagina = await operador.GetFromJsonAsync<PaginaDto<TicketResumenDto>>("/api/tickets/listado?pagina=1&porPagina=2");
+
+        Assert.Equal(2, pagina!.Items.Count());
+        Assert.True(pagina.Total >= 3);
+    }
+
+    [Fact]
+    public async Task El_detalle_de_otra_localidad_devuelve_404()
+    {
+        var pando = await ClienteConSesion("mtechera");
+        var lagomar = await ClienteConSesion("lgomez");
+        var propio = await Crear(pando, Solicitud("Detalle de Pando"));
+
+        Assert.Equal(HttpStatusCode.OK, (await pando.GetAsync($"/api/tickets/{propio.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await lagomar.GetAsync($"/api/tickets/{propio.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Un_filtro_invalido_devuelve_400()
+    {
+        var operador = await ClienteConSesion("vpereira");
+
+        var respuesta = await operador.GetAsync("/api/tickets/listado?estado=XXX");
+
+        Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+    }
     [Fact]
     public async Task Listar_sin_token_devuelve_401()
     {
