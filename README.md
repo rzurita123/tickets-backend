@@ -27,6 +27,8 @@ tests/
 
 En desarrollo usa LocalDB (base `SistemaTickets`). Al arrancar, la Api aplica las migraciones y carga los datos iniciales si la base está vacía.
 
+Los perfiles de inicio `http` y `https` también cargan los registros diarios de ejemplo en desarrollo, incluso si la base ya tiene tickets. Se registran como tickets privados, visibles para el personal de ORMEN. La referencia en la actividad de cada ticket evita duplicados al reiniciar.
+
 ```bash
 dotnet ef migrations add <Nombre> -p src/SistemaTickets.Infrastructure -s src/SistemaTickets.Api -o Persistencia/Migraciones
 dotnet ef database drop -p src/SistemaTickets.Infrastructure -s src/SistemaTickets.Api

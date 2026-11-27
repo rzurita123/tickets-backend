@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SistemaTickets.Application\SistemaTickets.Application.csproj" />
+    <EmbeddedResource Include="Persistencia\RegistrosDiarios.json" />
   </ItemGroup>
 
 </Project>

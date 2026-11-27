@@ -88,7 +88,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-await app.Services.PrepararBaseAsync(configuracion["UsuariosIniciales:Contrasena"]);
+await app.Services.PrepararBaseAsync(
+    configuracion["UsuariosIniciales:Contrasena"],
+    esDesarrollo && configuracion.GetValue<bool>("Ejemplos:CargarRegistrosDiarios"));
 
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
