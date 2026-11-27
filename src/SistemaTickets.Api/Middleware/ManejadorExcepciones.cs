@@ -27,8 +27,11 @@ public sealed class ManejadorExcepciones(ILogger<ManejadorExcepciones> registro)
         }
 
         contexto.Response.StatusCode = estado;
-        await contexto.Response.WriteAsJsonAsync(
-            new ProblemDetails { Status = estado, Title = excepcion.Message },
+        var problema = excepcion is ErrorTicket { Campo: string campo }
+            ? new ValidationProblemDetails(new Dictionary<string, string[]> { [campo] = [excepcion.Message] }) { Status = estado, Title = excepcion.Message }
+            : new ProblemDetails { Status = estado, Title = excepcion.Message };
+        await contexto.Response.WriteAsJsonAsync<object>(
+            problema,
             options: null,
             contentType: "application/problem+json",
             cancellationToken: cancelacion);

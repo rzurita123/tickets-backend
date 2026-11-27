@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SistemaTickets.Api.Seguridad;
+using SistemaTickets.Application.Auditoria;
 using SistemaTickets.Application.Usuarios;
 using SistemaTickets.Domain.Usuarios;
 
@@ -18,7 +19,7 @@ public record RespuestaIngreso(string Token, DateTime Expira, UsuarioDto Usuario
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(ServicioIngreso ingreso, IRepositorioUsuarios usuarios) : ControllerBase
+public class AuthController(ServicioIngreso ingreso, IRepositorioUsuarios usuarios, IAuditoria auditoria) : ControllerBase
 {
     [HttpPost("ingresar")]
     [AllowAnonymous]
@@ -35,7 +36,22 @@ public class AuthController(ServicioIngreso ingreso, IRepositorioUsuarios usuari
             return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Usuario o contraseña incorrectos.");
         }
 
+        auditoria.Registrar(resultado.Usuario.Id, OperacionesAuditoria.Login, detalle: "Usuario y contraseña");
+        await auditoria.GuardarAsync(cancelacion);
         return new RespuestaIngreso(resultado.Token.Valor, resultado.Token.Expira, UsuarioDto.Desde(resultado.Usuario));
+    }
+
+    [HttpPost("salir")]
+    [Authorize]
+    public async Task<ActionResult> Salir(CancellationToken cancelacion)
+    {
+        if (User.IdUsuario() is int id)
+        {
+            auditoria.Registrar(id, OperacionesAuditoria.Logout);
+            await auditoria.GuardarAsync(cancelacion);
+        }
+
+        return NoContent();
     }
 
     [HttpGet("yo")]

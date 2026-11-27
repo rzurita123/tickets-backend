@@ -1,13 +1,23 @@
 using System.Globalization;
 using System.Text;
+using SistemaTickets.Application.Auditoria;
 using SistemaTickets.Domain.Catalogos;
 
 namespace SistemaTickets.Application.Catalogos;
 
 public class ErrorCatalogo(string mensaje) : Exception(mensaje);
 
-public class ServicioCatalogos(IRepositorioCatalogos repositorio)
+public class ServicioCatalogos(IRepositorioCatalogos repositorio, IAuditoria auditoria)
 {
+    private static readonly Dictionary<TipoCatalogo, string> Nombres = new()
+    {
+        [TipoCatalogo.Sistemas] = "Sistemas",
+        [TipoCatalogo.Subsistemas] = "Subsistemas",
+        [TipoCatalogo.TiposProblema] = "Tipos de problema",
+        [TipoCatalogo.Criticidades] = "Criticidades",
+        [TipoCatalogo.GruposSoporte] = "Grupos de soporte",
+    };
+
     private static readonly Dictionary<TipoCatalogo, string> Prefijos = new()
     {
         [TipoCatalogo.Sistemas] = "sis",
@@ -20,7 +30,7 @@ public class ServicioCatalogos(IRepositorioCatalogos repositorio)
     public Task<IReadOnlyList<ItemCatalogo>> ListarAsync(TipoCatalogo tipo, CancellationToken cancelacion = default) =>
         repositorio.ListarAsync(tipo, cancelacion);
 
-    public async Task<ItemCatalogo> CrearAsync(TipoCatalogo tipo, string? nombre, string? codigoSistema, CancellationToken cancelacion = default)
+    public async Task<ItemCatalogo> CrearAsync(TipoCatalogo tipo, string? nombre, string? codigoSistema, int? autorId = null, CancellationToken cancelacion = default)
     {
         var items = await repositorio.ListarAsync(tipo, cancelacion);
         var limpio = Limpiar(nombre);
@@ -46,11 +56,12 @@ public class ServicioCatalogos(IRepositorioCatalogos repositorio)
         };
 
         await repositorio.AgregarAsync(tipo, item, cancelacion);
+        Auditar(autorId, tipo, item, $"alta de {limpio}");
         await repositorio.GuardarAsync(cancelacion);
         return item;
     }
 
-    public async Task<ItemCatalogo?> ModificarAsync(TipoCatalogo tipo, string codigo, string? nombre, bool? activo, CancellationToken cancelacion = default)
+    public async Task<ItemCatalogo?> ModificarAsync(TipoCatalogo tipo, string codigo, string? nombre, bool? activo, int? autorId = null, CancellationToken cancelacion = default)
     {
         var items = await repositorio.ListarAsync(tipo, cancelacion);
         var item = items.FirstOrDefault(x => x.Codigo == codigo);
@@ -59,9 +70,11 @@ public class ServicioCatalogos(IRepositorioCatalogos repositorio)
             return null;
         }
 
+        var cambios = new List<string>();
         if (nombre is not null)
         {
             var limpio = Limpiar(nombre);
+            cambios.Add(item.Nombre == limpio ? limpio : $"{item.Nombre} → {limpio}");
             ExigirNombreLibre(items, limpio, (item as Subsistema)?.SistemaId ?? 0, item);
             item.Nombre = limpio;
         }
@@ -69,11 +82,20 @@ public class ServicioCatalogos(IRepositorioCatalogos repositorio)
         if (activo is bool valor)
         {
             item.Activo = valor;
+            cambios.Add($"{item.Nombre} · {(valor ? "activado" : "desactivado")}");
+        }
+
+        if (cambios.Count > 0)
+        {
+            Auditar(autorId, tipo, item, string.Join(" · ", cambios));
         }
 
         await repositorio.GuardarAsync(cancelacion);
         return item;
     }
+
+    private void Auditar(int? autorId, TipoCatalogo tipo, ItemCatalogo item, string detalle) =>
+        auditoria.Registrar(autorId, OperacionesAuditoria.Catalogo, EntidadesAuditoria.Catalogo, item.Codigo, $"{Nombres[tipo]}: {detalle}");
 
     private static string Limpiar(string? nombre)
     {
