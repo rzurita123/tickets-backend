@@ -23,6 +23,9 @@ public static class RegistroPersistencia
         servicios.AddScoped<IRepositorioCatalogos, RepositorioCatalogos>();
         servicios.AddScoped<IRepositorioTickets, RepositorioTickets>();
         servicios.AddScoped<IRepositorioSoluciones, RepositorioSoluciones>();
+        servicios.AddMemoryCache();
+        servicios.AddScoped<IConsultaTickets, ConsultaTicketsEf>();
+        servicios.AddSingleton<ICatalogoLectura, CatalogoLecturaEnCache>();
         return servicios;
     }
 

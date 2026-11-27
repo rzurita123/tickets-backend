@@ -34,11 +34,38 @@ public class UsuariosTests(FabricaApi factory) : IClassFixture<FabricaApi>
         Assert.Equal(HttpStatusCode.Unauthorized, respuesta.StatusCode);
     }
 
-    private async Task<HttpClient> ClienteConSesion()
+    [Fact]
+    public async Task Un_cliente_ve_su_localidad_y_al_personal_de_ormen_sin_datos_de_contacto()
+    {
+        var cliente = await ClienteConSesion("mtechera");
+
+        var lista = (await cliente.GetFromJsonAsync<List<UsuarioDto>>("/api/usuarios"))!;
+
+        var yo = lista.Single(u => u.Usuario == "mtechera");
+        Assert.All(lista.Where(u => u.Rol == "CLIENTE"), u => Assert.Equal(yo.LocalidadId, u.LocalidadId));
+        Assert.Contains(lista, u => u.Rol != "CLIENTE");
+        Assert.NotEqual(string.Empty, yo.Email);
+        Assert.All(lista.Where(u => u.Usuario != "mtechera"), u => Assert.Equal(string.Empty, u.Email));
+    }
+
+    [Fact]
+    public async Task Un_operador_filtra_usuarios_por_rol_y_localidad()
+    {
+        var operador = await ClienteConSesion();
+
+        var clientes = await operador.GetFromJsonAsync<List<UsuarioDto>>("/api/usuarios?rol=cliente");
+        Assert.All(clientes!, u => Assert.Equal("CLIENTE", u.Rol));
+
+        var localidadId = clientes!.Single(u => u.Usuario == "mtechera").LocalidadId;
+        var deLaLocalidad = await operador.GetFromJsonAsync<List<UsuarioDto>>($"/api/usuarios?localidadId={localidadId}");
+        Assert.All(deLaLocalidad!, u => Assert.Equal(localidadId, u.LocalidadId));
+    }
+
+    private async Task<HttpClient> ClienteConSesion(string usuario = "vpereira")
     {
         var cliente = factory.CreateClient();
         var contrasena = factory.Services.GetRequiredService<IConfiguration>()["UsuariosIniciales:Contrasena"];
-        var respuesta = await cliente.PostAsJsonAsync("/api/auth/ingresar", new SolicitudIngreso("mtechera", contrasena));
+        var respuesta = await cliente.PostAsJsonAsync("/api/auth/ingresar", new SolicitudIngreso(usuario, contrasena));
         var ingreso = await respuesta.Content.ReadFromJsonAsync<RespuestaIngreso>();
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ingreso!.Token);
         return cliente;

@@ -12,13 +12,10 @@ public class RepositorioTickets(ContextoTickets contexto) : IRepositorioTickets
 
     public async Task<IReadOnlyList<Ticket>> ListarParaAsync(Usuario usuario, bool incluirBorradores, CancellationToken cancelacion = default)
     {
-        var esOrmen = usuario.EsOrmen;
-        var localidadId = usuario.LocalidadId;
         return await Completos()
             .AsNoTracking()
-            .Where(t => t.Estado == EstadoTicket.Borrador
-                ? incluirBorradores && t.CreadoPorId == usuario.Id
-                : esOrmen || (!t.Privado && localidadId != null && t.LocalidadId == localidadId))
+            .Where(VisibilidadTickets.Para(usuario))
+            .Where(t => incluirBorradores || t.Estado != EstadoTicket.Borrador)
             .OrderBy(t => t.Id)
             .ToListAsync(cancelacion);
     }
